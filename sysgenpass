@@ -1,0 +1,63 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sysgenpass - generate random passwords
+
+=cut
+
+=head1 SYNOPSIS
+
+    use sysgenpass --help for more into.
+
+    options:
+       length|l : specify the length of password, default 18.
+       help|h   : print help info.
+
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long;
+
+my $length;
+my $help;
+
+GetOptions(
+  "length|l=s"  => \$length,
+  "help|h!"     => \$help,
+);
+
+if($help) {
+  usage($0);
+}
+
+sub usage {
+  my $name = shift;
+  system("perldoc $name");
+  exit 0;
+}
+
+$length ||= 18;
+
+printf("%s\n",
+  join("", map{
+    ("a".."z", 
+     "A".."Z", 
+     0 .. 9,
+     "+", "-", "=", "_", "@",
+     "!", "~", "^", "%", "&",
+     "(", ")", "{", "}",
+    )[rand 76] 
+  } 1..$length)
+);
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.1 version
+
+=cut

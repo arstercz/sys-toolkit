@@ -1,0 +1,74 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys10to2 - convert decimal number to binary format
+
+=cut
+
+=head1 SYNOPSIS
+
+    use sys10to2 --help for more into.
+
+    options:
+       number|n : decimal number.
+       help|h   : print help info.
+
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long;
+
+my $number;
+my $help;
+
+GetOptions(
+  "number|n=i"  => \$number,
+  "help|h!"     => \$help,
+);
+
+if($help) {
+  usage($0);
+}
+
+sub usage {
+  my $name = shift;
+  system("perldoc $name");
+  exit 0;
+}
+
+# binary function
+sub binary {
+   my $n = shift @_;
+   return $n if $n == 0 || $n == 1;
+
+   my $b = $n%2;
+   my $expr = binary( int($n/2) );
+   return $expr . $b;
+}
+
+if ( ! defined $number) {
+  print "no number specified. use with -n option.\n";
+  exit 1;
+}
+elsif ( $number + 0 < 0 ) {
+  print "number $number should be grater than 0.\n";
+  exit 1;
+}
+else {
+  my $binary = binary($number);
+  print "$binary\n";
+}
+
+
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.1 version
+
+=cut

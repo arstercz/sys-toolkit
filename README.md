@@ -39,3 +39,12 @@ $ ./sysnton -n 0x0F
   dec: 15 
   hex: 0x0F
 ```
+
+## syspubip
+
+Get my public ip address by curl command.
+```
+$ ./syspubip 
+Get public ip address:
+110.89.157.218
+``` 

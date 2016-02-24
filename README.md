@@ -4,6 +4,8 @@ Some useful scripts to sysadmins/dbas.
 
 ## sysgenpass
 
+`type: perl`
+
 Generate complex random passwords.
 
 Example:
@@ -11,8 +13,11 @@ Example:
 $ ./sysgenpass 
 IEZQS_hW7=exO}JG@L
 ```
+help message: ./sysgenpass --help 
 
 ## sysnton
+
+`type: perl`
 
 Convert specified number to binary/octal/decimal/hexadecimal format.
 
@@ -39,12 +44,16 @@ $ ./sysnton -n 0x0F
   dec: 15 
   hex: 0x0F
 ```
+help message: ./sysnton --help
 
 ## syspubip
+
+`type: shell`
 
 Get my public ip address by curl command.
 ```
 $ ./syspubip 
 Get public ip address:
 110.89.157.218
-``` 
+```
+Can be used with no args.

@@ -1,0 +1,91 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sysnton - display specified format number to 
+          binary/octal/decimal/hexadecimal format
+
+=cut
+
+=head1 SYNOPSIS
+
+    use sysnton --help for more into.
+
+    options:
+       number|n : source number with specified format.
+                  number format with prefix, eg:
+                    binary     : 0b1111
+                    octal      : 017
+                    decimal    : 15
+                    hexadecimal: 0x0F
+       help|h: print help info.
+
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long;
+
+my $number;
+my $help;
+
+GetOptions(
+  "number|n=o"  => \$number,
+  "help|h!"     => \$help,
+);
+
+if($help) {
+  usage($0);
+}
+
+sub usage {
+  my $name = shift;
+  system("perldoc $name");
+  exit 0;
+}
+
+sub is_valid {
+   my $number = shift;
+   if( $number =~ /(?:^0b|^0x|^)\d+/i ) {
+       return 1;
+   }
+   else {
+       return 0;
+   }
+}
+
+sub number_display {
+  my $number = shift;
+  my @width = (3, 3, 3, 2);
+  
+  unless (is_valid($number)) {
+      print "invalid number $number \n";
+      exit 1;
+  }
+  printf("  %-*s: 0b%-*b\n  %-*s: 0%-*o\n  %-*s: %-*d\n  %-*s: 0x%0*X\n",
+    $width[0], "bin", $width[0], $number,
+    $width[1], "oct", $width[1], $number,
+    $width[2], "dec", $width[2], $number,
+    $width[3], "hex", $width[3], $number,
+  );
+}
+
+if ( ! defined $number) {
+  print "no number specified. use with -n option.\n";
+  exit 1;
+}
+else {
+  number_display($number);
+}
+
+
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut

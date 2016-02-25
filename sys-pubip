@@ -6,7 +6,7 @@
 exec 2>&1
 
 if [ $# -gt 0 ]; then
-   echo "Usage: syspubip"
+   echo "Usage: sys-pubip"
 fi
 
 curlcmd=$(which curl)

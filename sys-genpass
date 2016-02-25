@@ -2,13 +2,13 @@
 
 =head1 NAME
 
-sysgenpass - generate random passwords
+sys-genpass - generate random passwords
 
 =cut
 
 =head1 SYNOPSIS
 
-    use sysgenpass --help for more into.
+    use sys-genpass --help for more into.
 
     options:
        length|l : specify the length of password, default 18.

@@ -2,14 +2,14 @@
 
 =head1 NAME
 
-sysnton - display specified format number to 
-          binary/octal/decimal/hexadecimal format
+sys-nton - display specified format number to 
+           binary/octal/decimal/hexadecimal format
 
 =cut
 
 =head1 SYNOPSIS
 
-    use sysnton --help for more into.
+    use sys-nton --help for more into.
 
     options:
        number|n : source number with specified format.

@@ -115,6 +115,7 @@ Enter password :
     max_packet          4MB
     read_only           0
     is_slave            Yes
+    repl_check          OK
 ```
 
 help message: $ ./sys-mysql-summary --help

@@ -719,8 +719,23 @@ sub get_common_info($) {
         $common_hash{filter}   = $self->get_master_filter();
     }
     else {
-        $common_hash{is_slave} = 'Yes';
-        $common_hash{filter}   = $status{Filter};
+        $common_hash{is_slave}   = 'Yes';
+        $common_hash{filter}     = $status{Filter};
+        $common_hash{repl_check} = do {
+            if( $status{Slave_SQL_Running} eq 'Yes' &&
+                $status{Slave_IO_Running} eq 'Yes' ) 
+            {
+                if( $status{Seconds_Behind_Master} < 10 ) {
+                   "OK";
+                }
+                else {
+                   "Delay @{ [$status{Seconds_Behind_Master}] } Seconds";
+                }
+            }
+            else {
+                "Error";
+            }
+        };
     }
 
     return \%common_hash;

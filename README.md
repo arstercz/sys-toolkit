@@ -102,17 +102,19 @@ DBD::mysql
 perl-TermReadKey (if enable askpass option)
 ```
 
-$ ./sys-mysql-summary --host 127.0.0.1 --port 3306 --user=root --askpass
+$ ./sys-mysql-summary --host 127.0.0.1 --port 19681 --user=root --askpass
 ```
 Enter password : 
 +-127.0.0.1
-    version             5.5.23-rel25.3-log
-    server_id           6950122
-    has_gtid            Not Support
+    version             5.6.15-rel63.0-log
+    server_id           101
+    has_gtid            1
     binlog_enable       1
+    filter              
     binlog_format       STATEMENT
     max_packet          4MB
     read_only           0
+    is_slave            Yes
 ```
 
 help message: $ ./sys-mysql-summary --help

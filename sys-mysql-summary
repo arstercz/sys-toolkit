@@ -95,7 +95,7 @@ sub print_info {
     $str .= " " x ( 0 * $level ) . "+-$host\n";
     for my $key (
         qw(version server_id has_gtid binlog_enable filter
-        binlog_format max_packet read_only repl_check)
+        binlog_format max_packet read_only is_slave repl_check)
       )
     {
         $str .=
@@ -694,6 +694,7 @@ sub cut_host($) {
 sub get_common_info($) {
     my $self = shift;
 
+    my %status = ();
     my %common_hash = ();
     $common_hash{server_id} = $self->get_server_id();
     $common_hash{version}   = $self->get_version();
@@ -710,6 +711,17 @@ sub get_common_info($) {
     $common_hash{binlog_enable} = $self->is_binlog_enabled();
     $common_hash{max_packet} =
       $self->get_max_allowed_packet() / 1024 / 1024 . 'MB';
+
+    # check weather is a slave or not
+    %status = $self->check_slave_status();
+    if( $status{Status} ) {
+        $common_hash{is_slave} = 'No';
+        $common_hash{filter}   = $self->get_master_filter();
+    }
+    else {
+        $common_hash{is_slave} = 'Yes';
+        $common_hash{filter}   = $status{Filter};
+    }
 
     return \%common_hash;
 

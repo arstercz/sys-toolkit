@@ -96,8 +96,8 @@ sub print_info {
     my $str = "";
     $str .= " " x ( 0 * $level ) . "+-$host:$port\n";
     for my $key (
-        qw(version server_id has_gtid binlog_enable filter
-        binlog_format max_packet read_only is_slave repl_check)
+        qw(version server_id has_gtid binlog_enable total_size 
+        filter binlog_format max_packet read_only is_slave repl_check)
       )
     {
         $str .=
@@ -468,6 +468,11 @@ use constant Is_Readonly_SQL  => "SELECT \@\@global.read_only As Value";
 use constant Has_Gtid_SQL     => "SELECT \@\@global.gtid_mode As Value";
 use constant Get_ServerID_SQL => "SELECT \@\@global.server_id As Value";
 use constant Get_Version_SQL  => "SELECT VERSION() AS Value";
+use constant Get_metadata_SQL => "SELECT \@\@global.innodb_stats_on_metadata";
+use constant Set_metadata_SQL => "SET innodb_stats_on_metadata = 0";
+use constant Get_Total_Length_SQL => "SELECT SUM(DATA_LENGTH + INDEX_LENGTH) AS Value
+FROM information_schema.tables 
+WHERE TABLE_SCHEMA NOT IN (\"mysql\", \"test\", \"information_schema\", \"performance_schema\")";
 
 sub new {
     my ( $class, %args ) = @_;
@@ -495,6 +500,20 @@ sub get_variable {
     return $href->{Value};
 }
 
+sub set_variable {
+    my $self  = shift;
+    my $query = shift;
+    eval {
+        $self->{dbh}->do($query);
+    };
+    if($@) {
+        return 0;
+    }
+    else {
+        return 1;
+    }
+}
+
 # display one value that are not supported by select @@..
 sub show_variable($$) {
     my $self = shift;
@@ -515,6 +534,22 @@ sub is_binlog_enabled($) {
 sub is_read_only($) {
     my $self = shift;
     return $self->get_variable(Is_Readonly_SQL);
+}
+
+sub is_metadata_on($) {
+   my $self  = shift;
+   my $value = $self->get_variable(Get_metadata_SQL);
+   return 1 if( defined($value) && $value eq "ON" );
+   return 0;
+}
+
+sub get_total_size($$) {
+    my $self = shift;
+    #set innodb_stats_on_metadata = 0
+    if( $self->is_metadata_on() ) {
+       $self->set_variable(Set_metadata_SQL);
+    }
+    return $self->get_variable(Get_Total_Length_SQL) || 0;
 }
 
 sub has_gtid($) {
@@ -693,6 +728,22 @@ sub cut_host($) {
     return @hosts;
 }
 
+sub _hr_bytes_rnd($) {
+    my $num = shift;
+    if ($num >= (1024**3)) { #GB
+        return sprintf( "%.2fGB", ($num/(1024**3)) );
+    }
+    elsif ($num >= (1024**2)) { #MB
+        return sprintf( "%.2fMB", ($num/(1024**2)) );
+    }
+    elsif ($num >= 1024) { #KB
+        return sprintf( "%.2fKB", ($num/1024) );
+    }
+    else {
+        return sprintf( "%.2B", $num );
+    }
+}
+
 sub get_common_info($) {
     my $self = shift;
 
@@ -714,6 +765,7 @@ sub get_common_info($) {
     $common_hash{max_packet} =
       $self->get_max_allowed_packet() / 1024 / 1024 . 'MB';
 
+    $common_hash{total_size} = _hr_bytes_rnd($self->get_total_size());
     # check weather is a slave or not
     %status = $self->check_slave_status();
     if( $status{Status} ) {

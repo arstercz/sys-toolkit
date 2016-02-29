@@ -88,3 +88,31 @@ $ ./sys-ascii
 ```
 
 Can be used without args.
+
+## sys-mysql-summary
+
+`type perl`
+
+Get MySQL summary info.
+
+### DEPENDENCIES
+```
+DBI
+DBD::mysql
+perl-TermReadKey (if enable askpass option)
+```
+
+$ ./sys-mysql-summary --host 127.0.0.1 --port 3306 --user=root --askpass
+```
+Enter password : 
++-127.0.0.1
+    version             5.5.23-rel25.3-log
+    server_id           6950122
+    has_gtid            Not Support
+    binlog_enable       1
+    binlog_format       STATEMENT
+    max_packet          4MB
+    read_only           0
+```
+
+help message: $ ./sys-mysql-summary --help

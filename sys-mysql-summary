@@ -1,0 +1,716 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-mysql-summary -- display MySQL summary info.
+
+=head1 SYNOPSIS
+
+Usage:  [OPTION...]
+
+=head1 RISKS
+
+  The connect user must have process or replication_client privileges.
+
+=cut
+
+use strict;
+use warnings FATAL => 'all';
+use Carp;
+use Data::Dumper;
+use Getopt::Long qw(:config no_ignore_case);
+use English '-no_match_vars';
+use Term::ReadKey qw(ReadMode ReadKey);
+
+my $host     = '127.0.0.1';
+my $port     = 3306;
+my $user     = 'root';
+my $password = '';
+my $askpass  = 0;
+my $database = 'information_schema';
+my $debug    = 0;
+my $help     = 0;
+my $charset  = 'utf8';
+
+GetOptions(
+    "host|H=s"     => \$host,
+    "port|P=i"     => \$port,
+    "user|u=s"     => \$user,
+    "password|p=s" => \$password,
+    "askpass!"     => \$askpass,
+    "database|d=s" => \$database,
+    "charset|c=s"  => \$charset,
+    "debug|d!"     => \$debug,
+    "help|h!"      => \$help,
+) or die "error:$!";
+
+if ($help) {
+    usage($0);
+}
+
+sub usage {
+    my $name = shift;
+    system("perldoc $name");
+    exit 0;
+}
+
+if ($askpass) {
+   $password = noecho_password("Enter password ");
+}
+
+if ( !$password ) {
+    warn "Can not connect to MySQL without password.";
+    usage($0);
+    exit 1;
+}
+
+# Prompt for password when connecting to MySQL
+sub noecho_password {
+    my $prompt = shift;
+    local $OUTPUT_AUTOFLUSH = 1;
+    my $response;
+    eval {
+        if ($OSNAME =~ m/MSWin/) {
+            require Win32::Console::ANSI;
+        }
+        print "$prompt: ";
+        ReadMode('noecho');
+        $response = <STDIN>;
+        chomp($response);
+        ReadMode('normal');
+        print "\n" or die 
+            "Cannot print: $OS_ERROR";
+    };
+    if ($EVAL_ERROR) {
+        die "Cannot read respose; is Term::ReadKey installed? $EVAL_ERROR";
+    }
+    return $response;
+}
+
+sub print_info {
+    my $host_info  = shift @_;
+    print Dumper($host_info) if $debug;
+    my $level = 2;
+    my $str = "";
+    $str .= " " x ( 0 * $level ) . "+-$host\n";
+    for my $key (
+        qw(version server_id has_gtid binlog_enable filter
+        binlog_format max_packet read_only repl_check)
+      )
+    {
+        $str .=
+          " " x ( 2 * $level )
+          . sprintf( "%-20s%s\n", $key, $host_info->{$key} )
+          if defined $host_info->{$key};
+    }
+    print "$str";
+
+}
+
+# get db handle
+printf( "connect to %s, %d, %s, xxxxxxxx ...\n", $host, $port, $user )
+  if $debug;
+my $dbpre = MySQL::dbh->new(
+    host     => $host,
+    port     => $port,
+    user     => $user,
+    password => $password,
+    charset  => $charset,
+    driver   => 'mysql',
+);
+my $dbh = $dbpre->get_dbh( $database, { AutoCommit => 1 } ) or 
+                             die "Can't get dbh.. $host:$port";
+# get db info
+my $dbhelper  = MySQL::DBHelper->new( dbh => $dbh );
+my $host_info = $dbhelper->get_common_info();
+
+# display MyQL instance summary info.
+print_info($host_info);
+
+# ###################################################################
+# Documentation.
+# ###################################################################
+
+=head1 OPTIONS
+
+=over 4
+
+=item host | H
+
+MySQL host address, default value is '127.0.0.1'
+
+=item port | P
+
+MySQL port number. default value is 3306
+
+=item user | u
+
+MySQL username. default value is monitor
+
+=item password | p
+
+MySQL user password. no default value.
+
+=item askpass
+
+prompt for password options when connect to MySQL.
+
+=item database | D
+
+MySQL database will be used, default is 'query_log_review'.
+
+
+=item charset | A
+
+The character used when connect to MySQL, default value is UTF8.
+
+=item debug | d
+
+print debug info.
+
+=item help | h
+
+print help info.
+
+=back
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut
+
+package MySQL::dbh;
+
+# Get the database handle which user use, and this database
+# handle object should be destroy when leave MySQL database.
+use strict;
+use warnings FATAL => 'all';
+use constant PTDEBUG => $ENV{PTDEBUG} || 0;
+use English qw(-no_match_vars);
+use DBI;
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+
+use Data::Dumper;
+$Data::Dumper::Indent    = 1;
+$Data::Dumper::Sortkeys  = 1;
+$Data::Dumper::Quotekeys = 0;
+
+require Exporter;
+@ISA     = qw(Exporter);
+@EXPORT  = qw( get_dbh disconnect );
+$VERSION = '0.1.0';
+
+eval { require DBI; };
+
+if ($@) {
+    die "Cannot connect to MySQL because the Perl DBI module is not "
+      . "installed or not found.  Run 'perl -MDBI' to see the directories "
+      . "that Perl searches for DBI.  If DBI is not installed, try:\n"
+      . "  Debian/Ubuntu  apt-get install libdbi-perl\n"
+      . "  RHEL/CentOS    yum install perl-DBI\n"
+      . "  OpenSolaris    pkg install pkg:/SUNWpmdbi\n";
+}
+
+sub host {
+    my $self = shift;
+    $self->{host} = shift if @_;
+    return $self->{host};
+}
+
+sub port {
+    my $self = shift;
+    $self->{port} = shift if @_;
+    return $self->{port};
+}
+
+sub user {
+    my $self = shift;
+    $self->{user} = shift if @_;
+    return $self->{user};
+}
+
+sub password {
+    my $self = shift;
+    $self->{password} = shift if @_;
+    return $self->{password};
+}
+
+sub charset {
+    my $self = shift;
+    $self->{charset} = shift if @_;
+    return $self->{charset};
+}
+
+sub driver {
+    my $self = shift;
+    $self->{driver} = shift if @_;
+    return $self->{driver};
+}
+
+sub new {
+    my ( $class, %args ) = @_;
+    my @required_args = qw(host port user password);
+    PTDEBUG && print Dumper(%args);
+
+    foreach my $arg (@required_args) {
+        warn "I need a $arg argument" unless $args{$arg};
+    }
+
+    my $self = {};
+    bless $self, $class;
+
+    # options should be used.
+    $self->host( $args{'host'}         || 127.0.0.1 );
+    $self->port( $args{'port'}         || 3306 );
+    $self->user( $args{'user'}         || 'audit' );
+    $self->password( $args{'password'} || '' );
+    $self->charset( $args{'charset'}   || 'utf8' );
+    $self->driver( $args{'driver'}     || 'mysql' );
+
+    return $self;
+}
+
+sub get_dbh {
+    my ( $self, $database, $opts ) = @_;
+    $opts ||= {};
+    my $host     = $self->{host};
+    my $port     = $self->{port};
+    my $user     = $self->{user};
+    my $password = $self->{password};
+    my $charset  = $self->{charset};
+    my $driver   = $self->{driver};
+
+    my $defaults = {
+        AutoCommit         => 0,
+        RaiseError         => 1,
+        PrintError         => 0,
+        ShowErrorStatement => 1,
+        mysql_enable_utf8  => ( $charset =~ m/utf8/i ? 1 : 0 ),
+    };
+    @{$defaults}{ keys %$opts } = values %$opts;
+
+    #if ( $opts->{mysql_use_result} ) {
+    #    $defaults->{mysql_use_result} = 1;
+    #}
+
+    my $dbh;
+    my $tries = 2;
+    while ( !$dbh && $tries-- ) {
+        PTDEBUG
+          && print Dumper(
+            join( ', ', map { "$_=>$defaults->{$_}" } keys %$defaults ) );
+        $dbh = eval {
+            DBI->connect(
+                "DBI:$driver:database=$database;host=$host;port=$port",
+                $user, $password, $defaults );
+        };
+
+        if ( !$dbh && $@ ) {
+            if ( $@ =~ m/locate DBD\/mysql/i ) {
+                warn
+"Cannot connect to MySQL because the Perl DBD::mysql module is "
+                  . "not installed or not found.  Run 'perl -MDBD::mysql' to see "
+                  . "the directories that Perl searches for DBD::mysql.  If "
+                  . "DBD::mysql is not installed, try:\n"
+                  . "  Debian/Ubuntu  apt-get install libdbd-mysql-perl\n"
+                  . "  RHEL/CentOS    yum install perl-DBD-MySQL\n"
+                  . "  OpenSolaris    pgk install pkg:/SUNWapu13dbd-mysql\n";
+            }
+            elsif ( $@ =~ m/not a compiled character set|character set utf8/i )
+            {
+                PTDEBUG && print 'Going to try again without utf8 support\n';
+                delete $defaults->{mysql_enable_utf8};
+            }
+            if ( !$tries ) {
+                warn "$@";
+                return;
+            }
+
+        }
+    }
+
+    if ( $driver =~ m/mysql/i ) {
+        my $sql;
+        $sql = 'SELECT @@SQL_MODE';
+        PTDEBUG && print "+-- $sql\n";
+
+        my ($sql_mode) = eval { $dbh->selectrow_array($sql) };
+        warn "Error getting the current SQL_MORE: $@" if $@;
+
+        if ($charset) {
+            $sql = qq{/*!40101 SET NAMES "$charset"*/};
+            PTDEBUG && print "+-- $sql\n";
+            eval { $dbh->do($sql) };
+            warn "Error setting NAMES to $charset: $@" if $@;
+            PTDEBUG && print "Enabling charset to STDOUT\n";
+            if ( $charset eq 'utf8' ) {
+                binmode( STDOUT, ':utf8' )
+                  or warn "Can't binmode(STDOUT, ':utf8'): $!\n";
+            }
+            else {
+                binmode(STDOUT) or warn "Can't binmode(STDOUT): $!\n";
+            }
+        }
+
+        $sql =
+            'SET @@SQL_QUOTE_SHOW_CREATE = 1'
+          . '/*!40101, @@SQL_MODE=\'NO_AUTO_VALUE_ON_ZERO'
+          . ( $sql_mode ? ",$sql_mode" : '' ) . '\'*/';
+        PTDEBUG && print "+-- $sql\n";
+        eval { $dbh->do($sql) };
+        warn "Error setting SQL_QUOTE_SHOW_CREATE, SQL_MODE"
+          . ( $sql_mode ? " and $sql_mode" : '' ) . ": $@"
+          if $@;
+    }
+
+    if (PTDEBUG) {
+        print Dumper(
+            $dbh->selectrow_hashref(
+'SELECT DATABASE(), CONNECTION_ID(), VERSION()/*!50038, @@hostname*/'
+            )
+        );
+        print "+-- 'Connection info:', $dbh->{mysql_hostinfo}\n";
+        print Dumper(
+            $dbh->selectall_arrayref(
+                "SHOW VARIABLES LIKE 'character_set%'",
+                { Slice => {} }
+            )
+        );
+        print '+-- $DBD::mysql::VERSION:' . "$DBD::mysql::VERSION\n";
+        print '+-- $DBI::VERSION:' . "$DBI::VERSION\n";
+    }
+    return $dbh;
+}
+
+# handle should be destroy.
+sub disconnect {
+    my ( $self, $dbh ) = @_;
+    PTDEBUG && $self->print_active_handles( $self->get_dbh );
+    $dbh->disconnect;
+}
+
+sub print_active_handles {
+    my ( $self, $thing, $level ) = @_;
+    $level ||= 0;
+    printf(
+        "# Active %sh: %s %s %s\n",
+        ( $thing->{Type} || 'undef' ),
+        "\t" x $level,
+        $thing,
+        ( ( $thing->{Type} || '' ) eq 'st' ? $thing->{Statement} || '' : '' )
+    ) or warn "Cannot print: $OS_ERROR";
+    foreach my $handle ( grep { defined } @{ $thing->{ChildHandles} } ) {
+        $self->print_active_handles( $handle, $level + 1 );
+    }
+}
+
+1;
+
+package MySQL::DBHelper;
+use strict;
+use warnings FATAL => 'all';
+use English qw(-no_match_vars);
+use Carp qw(croak);
+use Data::Dumper;
+
+use constant Status => "Status";
+use constant Errstr => "Errstr";
+
+#show master status output
+use constant File              => "File";
+use constant Position          => "Position";
+use constant Binlog_Do_DB      => "Binlog_Do_DB";
+use constant Binlog_Ignore_DB  => "Binlog_Ignore_DB";
+use constant Executed_Gtid_Set => "Executed_Gtid_Set";
+
+#show slave status output
+use constant Slave_IO_State              => "Slave_IO_State";
+use constant Slave_SQL_Running           => "Slave_SQL_Running";
+use constant Slave_IO_Running            => "Slave_IO_Running";
+use constant Master_Log_File             => "Master_Log_File";
+use constant Master_Host                 => "Master_Host";
+use constant Master_User                 => "Master_User";
+use constant Master_Port                 => "Master_Port";
+use constant Replicate_Do_DB             => "Replicate_Do_DB";
+use constant Replicate_Ignore_DB         => "Replicate_Ignore_DB";
+use constant Replicate_Do_Table          => "Replicate_Do_Table";
+use constant Replicate_Ignore_Table      => "Replicate_Ignore_Table";
+use constant Replicate_Wild_Do_Table     => "Replicate_Wild_Do_Table";
+use constant Replicate_Wild_Ignore_Table => "Replicate_Wild_Ignore_Table";
+use constant Read_Master_Log_Pos         => "Read_Master_Log_Pos";
+use constant Relay_Master_Log_File       => "Relay_Master_Log_File";
+use constant Exec_Master_Log_Pos         => "Exec_Master_Log_Pos";
+use constant Relay_Log_File              => "Relay_Log_File";
+use constant Relay_Log_Pos               => "Relay_Log_Pos";
+use constant Seconds_Behind_Master       => "Seconds_Behind_Master";
+use constant Last_Errno                  => "Last_Errno";
+use constant Last_Error                  => "Last_Error";
+use constant Retrieved_Gtid_Set          => "Retrieved_Gtid_Set";
+use constant Auto_Position               => "Auto_Position";
+
+#general sql list
+use constant Show_One_Variable_SQL  => "SHOW GLOBAL VARIABLES LIKE ?";
+use constant Show_Slave_Status_SQL  => "SHOW SLAVE STATUS";
+use constant Show_Processlist_SQL   => "SHOW PROCESSLIST";
+use constant Show_Master_Status_SQL => "SHOW MASTER STATUS";
+use constant Get_Num_Workers_SQL =>
+  "SELECT \@\@global.slave_parallel_workers AS Value";
+use constant Get_MaxAllowedPacket_SQL =>
+  "SELECT \@\@global.max_allowed_packet AS Value";
+use constant Is_Readonly_SQL  => "SELECT \@\@global.read_only As Value";
+use constant Has_Gtid_SQL     => "SELECT \@\@global.gtid_mode As Value";
+use constant Get_ServerID_SQL => "SELECT \@\@global.server_id As Value";
+use constant Get_Version_SQL  => "SELECT VERSION() AS Value";
+
+sub new {
+    my ( $class, %args ) = @_;
+    my @required_args = qw(dbh);
+    foreach my $arg (@required_args) {
+        die "I need a $arg argument" unless $args{$arg};
+    }
+    my $self = {
+        dbh           => undef,
+        connection_id => undef,
+        has_gtid      => undef,
+        is_mariadb    => undef,
+    };
+    bless $self, $class;
+    $self->{dbh} = $args{'dbh'};
+    return $self;
+}
+
+sub get_variable {
+    my $self  = shift;
+    my $query = shift;
+    my $sth   = $self->{dbh}->prepare($query);
+    $sth->execute();
+    my $href = $sth->fetchrow_hashref;
+    return $href->{Value};
+}
+
+# display one value that are not supported by select @@..
+sub show_variable($$) {
+    my $self = shift;
+    my $cond = shift;
+    my $sth  = $self->{dbh}->prepare(Show_One_Variable_SQL);
+    $sth->execute($cond);
+    my $href = $sth->fetchrow_hashref;
+    return $href->{Value};
+}
+
+sub is_binlog_enabled($) {
+    my $self  = shift;
+    my $value = $self->show_variable("log_bin");
+    return 1 if ( defined($value) && $value eq "ON" );
+    return 0;
+}
+
+sub is_read_only($) {
+    my $self = shift;
+    return $self->get_variable(Is_Readonly_SQL);
+}
+
+sub has_gtid($) {
+    my $self  = shift;
+    my $value = $self->get_variable(Has_Gtid_SQL);
+    if ( defined($value) && $value eq "ON" ) {
+        $self->{has_gtid} = 1;
+        return 1;
+    }
+    return 0;
+}
+
+sub get_num_workers($) {
+    my $self = shift;
+    return $self->get_variable(Get_Num_Workers_SQL);
+}
+
+sub get_version($) {
+    my $self  = shift;
+    my $value = return $self->get_variable(Get_Version_SQL);
+    if ( $value =~ /MariaDB/ ) {
+        $self->{is_mariadb} = 1;
+    }
+    return $value;
+}
+
+sub get_server_id($) {
+    my $self = shift;
+    return $self->get_variable(Get_ServerID_SQL);
+}
+
+sub get_max_allowed_packet($) {
+    my $self = shift;
+    return $self->get_variable(Get_MaxAllowedPacket_SQL);
+}
+
+sub get_master_filter($) {
+    my $self = shift;
+    my ( $query, $sth, $href );
+    my %values;
+    my $str = "";
+    $query = Show_Master_Status_SQL;
+    $sth   = $self->{dbh}->prepare($query);
+    my $ret = $sth->execute();
+    return if ( !defined($ret) || $ret != 1 );
+
+    $href = $sth->fetchrow_hashref;
+    for my $filter_key ( Binlog_Do_DB, Binlog_Ignore_DB ) {
+        if ( length( $href->{$filter_key} ) > 0 ) {
+            $str .= sprintf( "%s: %s; ",
+                lc($filter_key), uniq_and_sort( $href->{$filter_key} ) );
+        }
+    }
+
+    return $str;
+}
+
+sub uniq_and_sort {
+    my $str = shift;
+    my @array = split( /,/, $str );
+    my %count;
+    @array = grep( !$count{$_}++, @array );
+    @array = sort @array;
+    return join( ',', @array );
+}
+
+sub check_slave_status {
+    my $self        = shift;
+    my $allow_dummy = shift;
+    my ( $query, $sth, $href );
+    my %status = ();
+
+    unless ( $self->{dbh} ) {
+        $status{Status} = 1;
+        $status{Errstr} = "Database Handle is not defined!";
+        return %status;
+    }
+
+    $query = Show_Slave_Status_SQL;
+    $sth   = $self->{dbh}->prepare($query);
+    my $ret = $sth->execute();
+    if ( !defined($ret) || $ret != 1 ) {
+
+        # I am not a slave
+        $status{Status} = 1;
+
+        # unexpected error
+        if ( defined( $sth->errstr ) ) {
+            $status{Status} = 2;
+            $status{Errstr} =
+                "Got error when executing "
+              . Show_Slave_Status_SQL . ". "
+              . $sth->errstr;
+        }
+        return %status;
+    }
+
+    $status{Status} = 0;
+    $href = $sth->fetchrow_hashref;
+
+    for my $key (
+        Slave_IO_State,        Master_Host,
+        Master_Port,           Master_User,
+        Slave_IO_Running,      Slave_SQL_Running,
+        Master_Log_File,       Read_Master_Log_Pos,
+        Relay_Master_Log_File, Last_Errno,
+        Last_Error,            Exec_Master_Log_Pos,
+        Relay_Log_File,        Relay_Log_Pos,
+        Seconds_Behind_Master, Retrieved_Gtid_Set,
+        Executed_Gtid_Set,     Auto_Position
+      )
+    {
+        $status{$key} = $href->{$key};
+    }
+
+    if (   !$status{Master_Host}
+        || !$status{Master_Log_File} )
+    {
+        unless ($allow_dummy) {
+
+            # I am not a slave
+            $status{Status} = 1;
+            return %status;
+        }
+    }
+
+    my $str = "";
+    for
+      my $filter_key ( Replicate_Do_DB, Replicate_Ignore_DB, Replicate_Do_Table,
+        Replicate_Ignore_Table, Replicate_Wild_Do_Table,
+        Replicate_Wild_Ignore_Table )
+    {
+        $status{$filter_key} = uniq_and_sort( $href->{$filter_key} );
+        if ( length( $href->{$filter_key} ) > 0 ) {
+            $str .= sprintf( "%s: %s; ",
+                lc($filter_key), uniq_and_sort( $href->{$filter_key} ) );
+        }
+    }
+    $status{Filter} = $str;
+
+    return %status;
+}
+
+sub get_threads_util {
+    my $dbh = shift;
+    my @threads;
+
+    my $sth = $dbh->prepare(Show_Processlist_SQL);
+    $sth->execute();
+
+    while ( my $ref = $sth->fetchrow_hashref() ) {
+        my $id         = $ref->{Id};
+        my $user       = $ref->{User};
+        my $host       = $ref->{Host};
+        my $command    = $ref->{Command};
+        my $state      = $ref->{State};
+        my $query_time = $ref->{Time};
+        my $info       = $ref->{Info};
+        $info =~ s/^\s*(.*?)\s*$/$1/ if defined($info);
+
+        push( @threads, $ref )
+          if ( defined($command) && $command =~ /^Binlog Dump/ );
+    }
+    return @threads;
+}
+
+sub cut_host($) {
+    my $info_ref = shift;
+    my @hosts    = ();
+    for (@$info_ref) {
+        my ( $host, $sport ) = split( /:/, $_->{Host}, 2 );
+        $host = '127.0.0.1' if $host =~/localhost/;
+        push @hosts, $host;
+    }
+
+    return @hosts;
+}
+
+sub get_common_info($) {
+    my $self = shift;
+
+    my %common_hash = ();
+    $common_hash{server_id} = $self->get_server_id();
+    $common_hash{version}   = $self->get_version();
+    $common_hash{read_only} = $self->is_read_only();
+    $common_hash{has_gtid}  = do {
+        if ( $common_hash{version} =~ m/5.6/ ) {
+            $self->has_gtid();
+        }
+        else {
+            "Not Support";
+        }
+    };
+    $common_hash{binlog_format} = $self->show_variable("binlog_format");
+    $common_hash{binlog_enable} = $self->is_binlog_enabled();
+    $common_hash{max_packet} =
+      $self->get_max_allowed_packet() / 1024 / 1024 . 'MB';
+
+    return \%common_hash;
+
+}

@@ -94,7 +94,7 @@ sub print_info {
     print Dumper($host_info) if $debug;
     my $level = 2;
     my $str = "";
-    $str .= " " x ( 0 * $level ) . "+-$host\n";
+    $str .= " " x ( 0 * $level ) . "+-$host:$port\n";
     for my $key (
         qw(version server_id has_gtid binlog_enable filter
         binlog_format max_packet read_only is_slave repl_check)

@@ -20,7 +20,6 @@ use Carp;
 use Data::Dumper;
 use Getopt::Long qw(:config no_ignore_case);
 use English '-no_match_vars';
-use Term::ReadKey qw(ReadMode ReadKey);
 
 my $host     = '127.0.0.1';
 my $port     = 3306;
@@ -70,6 +69,9 @@ sub noecho_password {
     local $OUTPUT_AUTOFLUSH = 1;
     my $response;
     eval {
+        #use Term::ReadKey qw(ReadMode ReadKey);
+        require Term::ReadKey;
+        Term::ReadKey->import(qw( ReadMode ReadKey ));
         if ($OSNAME =~ m/MSWin/) {
             require Win32::Console::ANSI;
         }

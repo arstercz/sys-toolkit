@@ -9,7 +9,7 @@ sys-nton - display specified format number to
 
 =head1 SYNOPSIS
 
-    use sys-nton --help for more into.
+    use sys-nton --help for more info.
 
     options:
        number|n : source number with specified format.

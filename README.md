@@ -91,11 +91,11 @@ Can be used without args.
 
 ## sys-mysql-summary
 
-`type perl`
+`type: perl`
 
 Get MySQL summary info.
 
-### DEPENDENCIES
+#### DEPENDENCIES
 ```
 DBI
 DBD::mysql

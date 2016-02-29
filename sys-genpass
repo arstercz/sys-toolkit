@@ -8,7 +8,7 @@ sys-genpass - generate random passwords
 
 =head1 SYNOPSIS
 
-    use sys-genpass --help for more into.
+    use sys-genpass --help for more info.
 
     options:
        length|l : specify the length of password, default 18.

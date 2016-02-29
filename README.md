@@ -119,3 +119,25 @@ Enter password :
 ```
 
 help message: $ ./sys-mysql-summary --help
+
+## sys-checkport
+
+`type: perl`
+
+check a host port is wether opened or not
+```
+$ ./sys-checkport -h 127.0.0.1 -p 22
+port 22: open
+
+$ ./sys-checkport -h 127.0.0.1 -p 22 -v
+port 22: open
+  source info 127.0.0.1:53659
+
+$ ./perl sys-checkport -h 127.0.0.1 -p 2000
+port 2000: closed
+
+$ ./sys-checkport -h 127.0.0.1 -p 2000 -u
+port 2000: open | filtered -- udp port has no response
+```
+
+help message: $./sys-checkport --help

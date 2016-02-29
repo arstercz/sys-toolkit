@@ -779,7 +779,7 @@ sub get_common_info($) {
             if( $status{Slave_SQL_Running} eq 'Yes' &&
                 $status{Slave_IO_Running} eq 'Yes' ) 
             {
-                if( $status{Seconds_Behind_Master} < 10 ) {
+                if( $status{Seconds_Behind_Master} < 1 ) {
                    "OK";
                 }
                 else {

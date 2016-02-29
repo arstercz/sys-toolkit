@@ -110,6 +110,7 @@ Enter password :
     server_id           101
     has_gtid            1
     binlog_enable       1
+    total_size          129.92MB
     filter              
     binlog_format       STATEMENT
     max_packet          4MB
@@ -140,4 +141,4 @@ $ ./sys-checkport -h 127.0.0.1 -p 2000 -u
 port 2000: open | filtered -- udp port has no response
 ```
 
-help message: $./sys-checkport --help
+help message: $ ./sys-checkport --help

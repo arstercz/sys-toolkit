@@ -1,0 +1,33 @@
+#!/bin/bash
+# prevent killing MySQL process by oom-killer
+# https://www.percona.com/blog/wp-content/uploads/2014/04/Running-MySQL-on-CentOS-Linux.pdf
+# zhe.chen<chenzhe07@gmail.com>
+
+exec 2>&1
+
+if [ $# -gt 0 ]; then
+   echo "Usage: sys-mysql-adj"
+fi
+
+pidofcmd=$(which pidof)
+if [ ! -x $pidofcmd ]; then
+   echo "can not find pidof command or has no permission"
+   exit 1
+fi
+
+mysqlpids=$($pidofcmd mysqld)
+
+if [ -z "$mysqlpids" ]; then
+   echo "no MySQL process";
+   exit 0;
+fi
+
+echo "oom_adj mysqld process"
+for mysql_pid in $mysqlpids; do
+   if [ -n $mysql_pid ]; then
+      if [ "`cat /proc/$mysql_pid/oom_adj`" -ne -17 ]; then
+          echo -17 > /proc/$mysql_pid/oom_adj
+          echo "pid $mysql_pid oom_adj = -17"
+      fi
+   fi
+done

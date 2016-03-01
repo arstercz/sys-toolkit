@@ -142,3 +142,21 @@ port 2000: open | filtered -- udp port has no response
 ```
 
 help message: $ ./sys-checkport --help
+
+## sys-mysql-adj
+
+`type: shell`
+
+prevent system killing MySQL process by oom-killer
+```
+./ $sys-mysql-adj
+oom_adj mysqld process
+pid 31265 oom_adj = -17
+pid 25653 oom_adj = -17
+pid 20247 oom_adj = -17
+
+./ $sys-mysql-adj
+no MySQL process
+```
+Can be used without args.
+

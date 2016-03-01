@@ -10,7 +10,7 @@ if [ $# -gt 0 ]; then
 fi
 
 curlcmd=$(which curl)
-if [ ! -x $curlpath ]; then
+if [ ! -x $curlcmd ]; then
    echo "can not find curl command or with no permission"
    exit 1
 fi

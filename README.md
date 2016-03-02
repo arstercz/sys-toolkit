@@ -170,8 +170,8 @@ to get memcached or redis summary info, output is the same as stats(slabs, size)
 command on memcached, and info command on redis.
 
 ```
-$ ./sys-mem-redis-summary -H 10.3.254.119 -p 6380 -t redis
-Connected to 10.3.254.119:6380
+$ ./sys-mem-redis-summary -H 127.0.0.1 -p 6380 -t redis
+Connected to 127.0.0.1:6380
 # Server
 redis_version:2.8.24
 redis_git_sha1:00000000
@@ -187,8 +187,8 @@ db0:keys=1,expires=0,avg_ttl=0
 db1:keys=1,expires=0,avg_ttl=0
 
 
-$ ./sys-mem-redis-summary -H 10.3.254.119 -p 11211 -t memcached
-Connected to 10.3.254.119:11211
+$ ./sys-mem-redis-summary -H 127.0.0.1 -p 11211 -t memcached
+Connected to 127.0.0.1:11211
 STAT pid 2144
 STAT uptime 529773
 STAT time 1456898381
@@ -200,3 +200,32 @@ STAT 128 5837
 END
 ```
 help message: $ ./sys-mem-redis-summary --help
+
+## sys-mysql-killblockthread
+
+`type: perl`
+
+#### Dependency
+```
+DBI
+DBD::mysql
+perl-TermReadKey (if enable askpass option)
+```
+
+kill the mysql blocking thread id if blocking times great than threthold(default is 10 times).
+
+```
+$ ./sys-mysql-killblockthread -H 10.3.254.119 -P 3306 -u root --askpass -v -k
+Enter password : 
+connect to 10.3.254.119, 3306, root, xxxxxxxx ...
+no thread_id blocking.
+
+
+ sys-mysql-killblockthread -H 10.3.254.119 -P 3306 -u root --askpass -v
+Enter password : 
+connect to 10.3.254.119, 3306, root, xxxxxxxx ...
+kill 100123 ok.
+kill 100251 ok.
+```
+
+help message: $ ./sys-mysql-killblockthread --help

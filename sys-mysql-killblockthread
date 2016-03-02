@@ -1,36 +1,120 @@
 #!/usr/bin/env perl
-# kill blocking thread id if blocking time great than 10;
+
+=head1 NAME
+
+sys-mysql-killblockthread - kill the mysql blocking thread id if 
+blocking time great than 10;
+
+=head1 SYNOPSIS
+
+Usage: [OPTION...]
+
+=head1 RISKS
+
+  This script will kill blocked sql, some update statements will
+be killed.
+
+=cut
+
 use strict;
 use warnings;
 use DBI;
 use DBD::mysql;
-use Getopt::Long;
+use Getopt::Long qw(:config no_ignore_case);
+use English '-no_match_vars';
 
-my $conf = 'db.conf';
-my $kill = 0;
-my $verbose = 0;
-my $threthold = 10;
+my $host     = '127.0.0.1';
+my $port     = 3306;
+my $user     = 'root';
+my $password = '';
+my $askpass  = 0;
+my $database = 'information_schema';
+my $charset  = 'utf8';
+my $help     = 0;
+my $kill     = 0;
+my $verbose  = 0;
+my $threthold= 10;
+
 GetOptions(
-  "conf=s"        => \$conf,
-  "verbose|v!"    => \$verbose,
-  "kill|k!"       => \$kill,
-  "threthold|t!"  => \$threthold,
-);
+    "host|H=s"     => \$host,
+    "port|P=i"     => \$port,
+    "user|u=s"     => \$user,
+    "password|p=s" => \$password,
+    "askpass!"     => \$askpass,
+    "database|d=s" => \$database,
+    "charset|c=s"  => \$charset,
+    "kill|k!"      => \$kill,
+    "verbose|v!"   => \$verbose,
+    "threthold|t!" => \$threthold,
+    "help|h!"      => \$help,
+) or die "option err: $!";
 
-
-$conf = "./$conf" if $conf && $conf =~ /^[^\/]/;
-sub get_dbh {
-      my $group = shift;
-      my $dbh = DBI->connect("DBI:mysql:mysql_read_default_file=$conf;mysql_read_default_group=$group", undef, undef);
+if ($help) {
+    usage($0);
 }
 
-my $dbh = get_dbh('laohu');
+sub usage {
+    my $name = shift;
+    system("perldoc $name");
+    exit 0;
+}
+
+if ($askpass) {
+   $password = noecho_password("Enter password ");
+}
+
+if ( !$password ) {
+    warn "Can not connect to MySQL without password.";
+    usage($0);
+    exit 1;
+}
+
+sub noecho_password {
+    my $prompt = shift;
+    local $OUTPUT_AUTOFLUSH = 1;
+    my $response;
+    eval {
+        require Term::ReadKey;
+        Term::ReadKey->import(qw( ReadMode ReadKey ));
+        if ($OSNAME =~ m/MSWin/) {
+            require Win32::Console::ANSI;
+        }
+        print "$prompt: ";
+        ReadMode('noecho');
+        $response = <STDIN>;
+        chomp($response);
+        ReadMode('normal');
+        print "\n" or die 
+            "Cannot print: $OS_ERROR";
+    };
+    if ($EVAL_ERROR) {
+        die "Cannot read respose; is Term::ReadKey installed? $EVAL_ERROR";
+    }
+    return $response;
+}
+
+# get db handle
+printf( "connect to %s, %d, %s, xxxxxxxx ...\n", $host, $port, $user )
+  if $verbose;
+my $dbpre = MySQL::dbh->new(
+    host     => $host,
+    port     => $port,
+    user     => $user,
+    password => $password,
+    charset  => $charset,
+    driver   => 'mysql',
+);
+
+my $dbh = $dbpre->get_dbh( $database, { AutoCommit => 1 } ) or
+                            die "Can't get dbh.. $host:$port";
 
 my $cur_threadid = $dbh->{'mysql_thread_id'};
 
 my $sql_block_info =<<"SQL_END";
-SELECT r.trx_id waiting_trx_id, r.trx_mysql_thread_id waiting_thread, r.trx_query waiting_query,
-       b.trx_id blocking_trx_id, b.trx_mysql_thread_id blocking_thread, b.trx_query blocking_query
+SELECT
+    r.trx_id waiting_trx_id, r.trx_mysql_thread_id waiting_thread, 
+    r.trx_query waiting_query,b.trx_id blocking_trx_id, 
+    b.trx_mysql_thread_id blocking_thread, b.trx_query blocking_query
 FROM information_schema.innodb_lock_waits w
 INNER JOIN information_schema.innodb_trx b
 ON b.trx_id = w.blocking_trx_id
@@ -41,14 +125,25 @@ SQL_END
 my $block_thread_info = $dbh->selectall_arrayref($sql_block_info);
 my %thread_id;
 foreach my $thread (@$block_thread_info) {
-   my ($waiting_thread_id, $blocking_thread) = @$thread[1,4];
+   my ($waiting_thread_id, $waiting_query, $blocking_thread, 
+                           $blocking_query) = @$thread[1,4];
+
+   print "waiting_thread_id: $waiting_thread_id\n
+          waiting_query:     $waiting_query\n
+          blocking_thread:   $blocking_thread\n 
+          blocking_query:    $blocking_query" 
+          if $verbose;
+
    if(defined $blocking_thread) {
-     $thread_id{$blocking_thread} += 1;
+     $thread_id{$blocking_thread}++;
    }
 }
 
 my $count = keys %thread_id;
-print "no thread_id blocking.\n" if $count == 0;
+if ($count == 0) {
+    print "no thread_id blocking.\n";
+    exit 0;
+}
 
 foreach my $thread (keys %thread_id) {
  my $value = $thread_id{$thread};
@@ -59,10 +154,300 @@ foreach my $thread (keys %thread_id) {
               $dbh->do("kill $thread");
        };
        if($@) {
-           warn "kill $thread: $@\n" 
+           warn "kill $thread error: $@\n" 
        } else {
            print "kill $thread ok.\n";
        }
    }
  }
 }
+
+# ###################################################################
+# Documentation.
+# ###################################################################
+
+=head1 OPTIONS
+
+=over 4
+
+=item host | H
+
+MySQL host address, default value is '127.0.0.1'
+
+=item port | P
+
+MySQL port number. default value is 3306
+
+=item user | u
+
+MySQL username. default value is monitor
+
+=item password | p
+
+MySQL user password. no default value.
+
+=item askpass
+
+prompt for password options when connect to MySQL.
+
+=item database | D
+
+MySQL database will be used, default is 'information_schema'.
+
+=item charset | A
+
+The character used when connect to MySQL, default value is UTF8.
+
+=item kill|k
+
+kill the blocked sql thread.
+
+=item threthold|t
+
+kill the sql which blocking times greater than specified times.
+
+=item verbose|v
+
+print debug info.
+
+=item help | h
+
+print help info.
+
+=back
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut
+
+package MySQL::dbh;
+# Get the database handle which user use, and this database
+# handle object should be destroy when leave MySQL database.
+
+use strict;
+use warnings FATAL => 'all';
+use constant PTDEBUG => $ENV{PTDEBUG} || 0;
+use English qw(-no_match_vars);
+use DBI;
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+
+use Data::Dumper;
+$Data::Dumper::Indent    = 1;
+$Data::Dumper::Sortkeys  = 1;
+$Data::Dumper::Quotekeys = 0;
+
+require Exporter;
+@ISA     = qw(Exporter);
+@EXPORT  = qw( get_dbh disconnect );
+$VERSION = '0.1.0';
+
+eval { require DBI; };
+
+if ($@) {
+    die "Cannot connect to MySQL because the Perl DBI module is not "
+      . "installed or not found.  Run 'perl -MDBI' to see the directories "
+      . "that Perl searches for DBI.  If DBI is not installed, try:\n"
+      . "  Debian/Ubuntu  apt-get install libdbi-perl\n"
+      . "  RHEL/CentOS    yum install perl-DBI\n"
+      . "  OpenSolaris    pkg install pkg:/SUNWpmdbi\n";
+}
+
+sub host {
+    my $self = shift;
+    $self->{host} = shift if @_;
+    return $self->{host};
+}
+
+sub port {
+    my $self = shift;
+    $self->{port} = shift if @_;
+    return $self->{port};
+}
+
+sub user {
+    my $self = shift;
+    $self->{user} = shift if @_;
+    return $self->{user};
+}
+
+sub password {
+    my $self = shift;
+    $self->{password} = shift if @_;
+    return $self->{password};
+}
+
+sub charset {
+    my $self = shift;
+    $self->{charset} = shift if @_;
+    return $self->{charset};
+}
+
+sub driver {
+    my $self = shift;
+    $self->{driver} = shift if @_;
+    return $self->{driver};
+}
+
+sub new {
+    my ( $class, %args ) = @_;
+    my @required_args = qw(host port user password);
+    PTDEBUG && print Dumper(%args);
+
+    foreach my $arg (@required_args) {
+        warn "I need a $arg argument" unless $args{$arg};
+    }
+
+    my $self = {};
+    bless $self, $class;
+
+    # options should be used.
+    $self->host( $args{'host'}         || 127.0.0.1 );
+    $self->port( $args{'port'}         || 3306 );
+    $self->user( $args{'user'}         || 'audit' );
+    $self->password( $args{'password'} || '' );
+    $self->charset( $args{'charset'}   || 'utf8' );
+    $self->driver( $args{'driver'}     || 'mysql' );
+
+    return $self;
+}
+
+sub get_dbh {
+    my ( $self, $database, $opts ) = @_;
+    $opts ||= {};
+    my $host     = $self->{host};
+    my $port     = $self->{port};
+    my $user     = $self->{user};
+    my $password = $self->{password};
+    my $charset  = $self->{charset};
+    my $driver   = $self->{driver};
+
+    my $defaults = {
+        AutoCommit         => 0,
+        RaiseError         => 1,
+        PrintError         => 0,
+        ShowErrorStatement => 1,
+        mysql_enable_utf8  => ( $charset =~ m/utf8/i ? 1 : 0 ),
+    };
+    @{$defaults}{ keys %$opts } = values %$opts;
+
+    if ( $opts->{mysql_use_result} ) {
+        $defaults->{mysql_use_result} = 1;
+    }
+
+    my $dbh;
+    my $tries = 2;
+    while ( !$dbh && $tries-- ) {
+        PTDEBUG
+          && print Dumper(
+            join( ', ', map { "$_=>$defaults->{$_}" } keys %$defaults ) );
+        $dbh = eval {
+            DBI->connect(
+                "DBI:$driver:database=$database;host=$host;port=$port",
+                $user, $password, $defaults );
+        };
+
+        if ( !$dbh && $@ ) {
+            if ( $@ =~ m/locate DBD\/mysql/i ) {
+                warn
+"Cannot connect to MySQL because the Perl DBD::mysql module is "
+                  . "not installed or not found.  Run 'perl -MDBD::mysql' to see "
+                  . "the directories that Perl searches for DBD::mysql.  If "
+                  . "DBD::mysql is not installed, try:\n"
+                  . "  Debian/Ubuntu  apt-get install libdbd-mysql-perl\n"
+                  . "  RHEL/CentOS    yum install perl-DBD-MySQL\n"
+                  . "  OpenSolaris    pgk install pkg:/SUNWapu13dbd-mysql\n";
+            }
+            elsif ( $@ =~ m/not a compiled character set|character set utf8/i )
+            {
+                PTDEBUG && print 'Going to try again without utf8 support\n';
+                delete $defaults->{mysql_enable_utf8};
+            }
+            if ( !$tries ) {
+                warn "$@";
+                return;
+            }
+       }
+    }
+
+    if ( $driver =~ m/mysql/i ) {
+        my $sql;
+        $sql = 'SELECT @@SQL_MODE';
+        PTDEBUG && print "+-- $sql\n";
+
+        my ($sql_mode) = eval { $dbh->selectrow_array($sql) };
+        warn "Error getting the current SQL_MORE: $@" if $@;
+
+        if ($charset) {
+            $sql = qq{/*!40101 SET NAMES "$charset"*/};
+            PTDEBUG && print "+-- $sql\n";
+            eval { $dbh->do($sql) };
+            warn "Error setting NAMES to $charset: $@" if $@;
+            PTDEBUG && print "Enabling charset to STDOUT\n";
+            if ( $charset eq 'utf8' ) {
+                binmode( STDOUT, ':utf8' )
+                  or warn "Can't binmode(STDOUT, ':utf8'): $!\n";
+            }
+            else {
+                binmode(STDOUT) or warn "Can't binmode(STDOUT): $!\n";
+            }
+        }
+
+        $sql =
+            'SET @@SQL_QUOTE_SHOW_CREATE = 1'
+          . '/*!40101, @@SQL_MODE=\'NO_AUTO_VALUE_ON_ZERO'
+          . ( $sql_mode ? ",$sql_mode" : '' ) . '\'*/';
+        PTDEBUG && print "+-- $sql\n";
+        eval { $dbh->do($sql) };
+        warn "Error setting SQL_QUOTE_SHOW_CREATE, SQL_MODE"
+          . ( $sql_mode ? " and $sql_mode" : '' ) . ": $@"
+          if $@;
+    }
+
+    if (PTDEBUG) {
+        print Dumper(
+            $dbh->selectrow_hashref(
+'SELECT DATABASE(), CONNECTION_ID(), VERSION()/*!50038, @@hostname*/'
+            )
+        );
+        print "+-- 'Connection info:', $dbh->{mysql_hostinfo}\n";
+        print Dumper(
+            $dbh->selectall_arrayref(
+                "SHOW VARIABLES LIKE 'character_set%'",
+                { Slice => {} }
+            )
+        );
+        print '+-- $DBD::mysql::VERSION:' . "$DBD::mysql::VERSION\n";
+        print '+-- $DBI::VERSION:' . "$DBI::VERSION\n";
+    }
+    return $dbh;
+}
+
+# handle should be destroy.
+sub disconnect {
+    my ( $self, $dbh ) = @_;
+    PTDEBUG && $self->print_active_handles( $self->get_dbh );
+    $dbh->disconnect;
+}
+
+sub print_active_handles {
+    my ( $self, $thing, $level ) = @_;
+    $level ||= 0;
+    printf(
+        "# Active %sh: %s %s %s\n",
+        ( $thing->{Type} || 'undef' ),
+        "\t" x $level,
+        $thing,
+        ( ( $thing->{Type} || '' ) eq 'st' ? $thing->{Statement} || '' : '' )
+    ) or warn "Cannot print: $OS_ERROR";
+    foreach my $handle ( grep { defined } @{ $thing->{ChildHandles} } ) {
+        $self->print_active_handles( $handle, $level + 1 );
+    }
+}
+
+1;

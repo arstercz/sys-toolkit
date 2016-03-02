@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-sys-checkport - check a host port is wether opened or not.
+sys-mem-redis-summary - to get memcached or redis summary info.
 
 =cut
 
@@ -23,7 +23,7 @@ use strict;
 use warnings;
 use IO::Socket::INET;
 use Data::Dumper;
-use Getopt::Long;
+use Getopt::Long qw(:config no_ignore_case);
 
 my $host = '127.0.0.1';
 my $port;

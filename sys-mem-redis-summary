@@ -11,7 +11,7 @@ sys-checkport - check a host port is wether opened or not.
     use sys-memcached-summary --help for more info.
 
     options:
-       host|h :  host address, default is 127.0.0.1.
+       host|H :  host address, default is 127.0.0.1.
        port|p :  port number, must be specified.
        type|t :  memcached or redis, default is redis.
        help|h :  print help info.
@@ -32,10 +32,10 @@ my $verbose;
 my $help;
 
 GetOptions(
-    "host|h=s"   => \$host,
+    "host|H=s"   => \$host,
     "port|p=i"   => \$port,
     "type|t=s"   => \$type,
-    "help!"      => \$help,
+    "help|h!"      => \$help,
     "verbose|v!" => \$verbose,
 );
 

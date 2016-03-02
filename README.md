@@ -149,14 +149,54 @@ help message: $ ./sys-checkport --help
 
 prevent system killing MySQL process by oom-killer
 ```
-./ $sys-mysql-adj
+$ ./sys-mysql-adj
 oom_adj mysqld process
 pid 31265 oom_adj = -17
 pid 25653 oom_adj = -17
 pid 20247 oom_adj = -17
 
-./ $sys-mysql-adj
+$ ./sys-mysql-adj
 no MySQL process
 ```
 Can be used without args.
 
+## sys-mem-redis-summary
+
+`type perl`
+
+#### No Denpendencies
+
+to get memcached or redis summary info, output is the same as stats(slabs, size) 
+command on memcached, and info command on redis.
+
+```
+$ ./sys-mem-redis-summary -H 10.3.254.119 -p 6380 -t redis
+Connected to 10.3.254.119:6380
+# Server
+redis_version:2.8.24
+redis_git_sha1:00000000
+redis_git_dirty:0
+redis_build_id:4159b299ae09869c
+redis_mode:standalone
+os:Linux 2.6.32-573.18.1.el6.x86_64 x86_64
+arch_bits:64
+multiplexing_api:epoll
+...
+# Keyspace
+db0:keys=1,expires=0,avg_ttl=0
+db1:keys=1,expires=0,avg_ttl=0
+
+
+$ ./sys-mem-redis-summary -H 10.3.254.119 -p 11211 -t memcached
+Connected to 10.3.254.119:11211
+STAT pid 2144
+STAT uptime 529773
+STAT time 1456898381
+STAT version 1.4.4
+STAT pointer_size 64
+STAT rusage_user 582.232487
+....
+STAT 128 5837
+END
+```
+help message: $ ./sys-mem-redis-summary --help

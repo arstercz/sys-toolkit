@@ -1,0 +1,68 @@
+#!/usr/bin/env perl
+# kill blocking thread id if blocking time great than 10;
+use strict;
+use warnings;
+use DBI;
+use DBD::mysql;
+use Getopt::Long;
+
+my $conf = 'db.conf';
+my $kill = 0;
+my $verbose = 0;
+my $threthold = 10;
+GetOptions(
+  "conf=s"        => \$conf,
+  "verbose|v!"    => \$verbose,
+  "kill|k!"       => \$kill,
+  "threthold|t!"  => \$threthold,
+);
+
+
+$conf = "./$conf" if $conf && $conf =~ /^[^\/]/;
+sub get_dbh {
+      my $group = shift;
+      my $dbh = DBI->connect("DBI:mysql:mysql_read_default_file=$conf;mysql_read_default_group=$group", undef, undef);
+}
+
+my $dbh = get_dbh('laohu');
+
+my $cur_threadid = $dbh->{'mysql_thread_id'};
+
+my $sql_block_info =<<"SQL_END";
+SELECT r.trx_id waiting_trx_id, r.trx_mysql_thread_id waiting_thread, r.trx_query waiting_query,
+       b.trx_id blocking_trx_id, b.trx_mysql_thread_id blocking_thread, b.trx_query blocking_query
+FROM information_schema.innodb_lock_waits w
+INNER JOIN information_schema.innodb_trx b
+ON b.trx_id = w.blocking_trx_id
+INNER JOIN information_schema.innodb_trx r
+ON r.trx_id = w.requesting_trx_id
+SQL_END
+
+my $block_thread_info = $dbh->selectall_arrayref($sql_block_info);
+my %thread_id;
+foreach my $thread (@$block_thread_info) {
+   my ($waiting_thread_id, $blocking_thread) = @$thread[1,4];
+   if(defined $blocking_thread) {
+     $thread_id{$blocking_thread} += 1;
+   }
+}
+
+my $count = keys %thread_id;
+print "no thread_id blocking.\n" if $count == 0;
+
+foreach my $thread (keys %thread_id) {
+ my $value = $thread_id{$thread};
+ if( $value + 0 > $threthold ) {
+   print "thread_id : $thread, times: $value\n" if $verbose;
+   if ($kill) {
+       eval {
+              $dbh->do("kill $thread");
+       };
+       if($@) {
+           warn "kill $thread: $@\n" 
+       } else {
+           print "kill $thread ok.\n";
+       }
+   }
+ }
+}

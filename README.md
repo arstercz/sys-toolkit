@@ -162,12 +162,14 @@ Can be used without args.
 
 ## sys-mem-redis-summary
 
-`type perl`
+`type: perl`
 
-#### No Denpendencies
+#### No Dependencies
 
 to get memcached or redis summary info, output is the same as stats(slabs, size) 
 command on memcached, and info command on redis.
+
+note: does not support password authentication when get redis info.
 
 ```
 $ ./sys-mem-redis-summary -H 127.0.0.1 -p 6380 -t redis
@@ -229,3 +231,14 @@ kill 100251 ok.
 ```
 
 help message: $ ./sys-mysql-killblockthread --help
+
+## sys-shell-type
+
+`type: shell`
+
+identifi the type of shell we used in current shell.
+```
+$ ./sys-shell-type 
+bash
+```
+Can be used without args

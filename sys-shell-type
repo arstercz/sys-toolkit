@@ -1,0 +1,40 @@
+#!/bin/bash
+# identifi the type of shell we used in current shell
+# zhe.chen<chenzhe07@gmail.com>
+
+exec 2>&1
+
+if [ $# -gt 0 ]; then
+   echo "Usage: sys-shell-type"
+fi
+
+# if hava readlink, and /proc/$$/exe
+if [ -e /proc/$$/exe ]; then
+   readlinkcmd=$(which readlink)
+   if [ -x $readlinkcmd ]; then
+       $readlinkcmd /proc/$$/exe
+       exit 0
+   fi
+fi
+
+# heuristics way to test
+if [ -n "$version" ]; then
+   t="tcsh"
+elif [ -n "$BASH" ]; then
+   t="bash"
+elif [ -n "$shell" ]; then
+   t="csh or tcsh"
+elif [ -n "$ZSH_NAME" ]; then
+   t="zsh"
+elif [ -n "$KSH_VERSION" ]; then
+   t="ksh"
+fi
+
+if [ ! -z "$t" ]; then
+   echo $t
+   exit 0
+fi
+
+# fallback
+echo "unknown"
+exit 0

@@ -219,13 +219,13 @@ kill the mysql blocking thread id if blocking times great than threthold(default
 ```
 $ ./sys-mysql-killblockthread -h 127.0.0.1 -P 3306 -u root --askpass -v -k
 Enter password : 
-connect to 10.3.254.119, 3306, root, xxxxxxxx ...
+connect to 127.0.0.1, 3306, root, xxxxxxxx ...
 no thread_id blocking.
 
 
  sys-mysql-killblockthread -h 127.0.0.1 -P 3306 -u root --askpass -v
 Enter password : 
-connect to 10.3.254.119, 3306, root, xxxxxxxx ...
+connect to 127.0.0.1, 3306, root, xxxxxxxx ...
 kill 100123 ok.
 kill 100251 ok.
 ```
@@ -242,6 +242,32 @@ $ ./sys-shell-type
 bash
 ```
 Can be used without args
+
+## sys-mysql-killlongquery
+
+`type: perl`
+
+#### Dependency
+```
+DBI
+DBD::mysql
+perl-TermReadKey (if enable askpass option)
+```
+kill the mysql long query's thread if query time greater than specified 
+time value;
+
+*note: This script will kill running sql, some update/select statements 
+will be killed, connection state 'Binlog Dump', 'Connect' and 'Sleep'
+is ignored.
+
+```
+$ ./sys-mysql-killlongquery -h 127.0.0.1 -u root --askpass -v -k -t 5
+Enter password : 
+connect to 127.0.0.1, 3306, root, xxxxxxxx ...
+[INFO] thread: 92, user: test@127.0.0.1:45775, db: test, state: User sleep, time: 5, query: select sleep(15)
+kill 92 ok
+```
+help message: $ ./sys-mysql-killlongquery --help
 
 ## License
 

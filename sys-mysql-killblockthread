@@ -36,7 +36,7 @@ my $verbose  = 0;
 my $threthold= 10;
 
 GetOptions(
-    "host|H=s"     => \$host,
+    "host|h=s"     => \$host,
     "port|P=i"     => \$port,
     "user|u=s"     => \$user,
     "password|p=s" => \$password,
@@ -46,7 +46,7 @@ GetOptions(
     "kill|k!"      => \$kill,
     "verbose|v!"   => \$verbose,
     "threthold|t!" => \$threthold,
-    "help|h!"      => \$help,
+    "help!"        => \$help,
 ) or die "option err: $!";
 
 if ($help) {

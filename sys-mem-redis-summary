@@ -11,10 +11,10 @@ sys-mem-redis-summary - to get memcached or redis summary info.
     use sys-memcached-summary --help for more info.
 
     options:
-       host|H :  host address, default is 127.0.0.1.
-       port|p :  port number, must be specified.
-       type|t :  memcached or redis, default is redis.
-       help|h :  print help info.
+       host|h:  host address, default is 127.0.0.1.
+       port|p:  port number, must be specified.
+       type|t:  memcached or redis, default is redis.
+       help  :  print help info.
        verbose|v :  print source source ip address and port.
 
 =cut
@@ -32,10 +32,10 @@ my $verbose;
 my $help;
 
 GetOptions(
-    "host|H=s"   => \$host,
+    "host|h=s"   => \$host,
     "port|p=i"   => \$port,
     "type|t=s"   => \$type,
-    "help|h!"      => \$help,
+    "help!"      => \$help,
     "verbose|v!" => \$verbose,
 );
 

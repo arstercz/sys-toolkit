@@ -269,6 +269,26 @@ kill 92 ok
 ```
 help message: $ ./sys-mysql-killlongquery --help
 
+## sys-php-chroot
+
+`type: shell`
+
+php chroot initialization work, covering DNS , php iconv and and ssl(https).
+
+```
+$ ./sys-php-chroot /web/php/chroot
+tar: Removing leading `/' from member names
+...
+chroot directory /web/php/chroot initialized as
+   162    0 drwxr-xr-x   7 root     root           71 Mar 11 14:58 /web/php/chroot
+...
+
+Calling ssl secured sites via curl in an chroot env, some /usr/lib64 library was needed:
+http://jameskirsop.com/calling-ssl-secured-sites-via-curl-in-an-apache-chroot/
+```
+
+help message: `Usage: ./sys-php-chroot /path/to/chrootdir`
+
 ## License
 
 MIT / BSD

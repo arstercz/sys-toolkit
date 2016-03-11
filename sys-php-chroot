@@ -1,0 +1,134 @@
+#!/bin/bash
+
+# php chroot initialization work, covering DNS , php iconv 
+# and ssl(https).
+# v0.1 by kaiwang.chen
+# zhe.chen<chenzhe07@gmail.com>
+
+exec 2>&1
+
+VERSION=0.2
+
+set -e
+
+[[ $UID -ne 0 ]] && {
+  echo "must be root to initialize chroot directory"
+  exit 1
+}
+
+CHROOT_DIR=$1
+[[ "$CHROOT_DIR"x = "x" ]] && {
+  echo "Usage: $0 /path/to/chrootdir"
+  exit 1
+}
+echo "$CHROOT_DIR" | grep -q '^[^/]' && {
+  echo "specify absolute path as chrootdir, abort ..."
+  exit 1
+}
+
+[[ -e $CHROOT_DIR ]] && {
+  echo "chroot $CHROOT_DIR exists, abort ..."
+  exit 1
+}
+
+mkdir -p $CHROOT_DIR/{tmp,etc,etc/pki,usr}
+chmod --reference /tmp $CHROOT_DIR/tmp
+
+# path trick for php.ini, which is always available in chroot or not.
+mkdir -p $CHROOT_DIR/$CHROOT_DIR/applog
+ln -s `echo $CHROOT_DIR/applog | sed 's/^\///'` $CHROOT_DIR
+
+# http://www.faqs.org/docs/linux_network/x-087-2-resolv.library.html
+# not sure why nsswitch.conf in the host system is used.
+
+# actually what in php-config --with-libdir is needed, the other is optional
+tar cf - /lib*/libnss_* | tar xf - -C $CHROOT_DIR
+cp -a /etc/resolv.conf $CHROOT_DIR/etc/
+
+# iconv support
+tar cf - /usr/lib64/gconv/ | tar xf - -C $CHROOT_DIR
+cp -a /usr/lib*/libnsspem.so $CHROOT_DIR/usr/lib*/
+cp -a /usr/lib*/libsoftokn3.so $CHROOT_DIR/usr/lib*/
+cp -a /usr/lib*/libsqlite3.so* $CHROOT_DIR/usr/lib*/
+tar cf - /etc/pki/nssdb/ | tar xf - -C $CHROOT_DIR
+tar cf - /etc/pki/tls/ | tar xf - -C $CHROOT_DIR
+
+(
+echo -e -n "by `basename $0` ver $VERSION at ` date`"
+echo 
+echo
+
+echo -e "chroot directory $CHROOT_DIR initialized as"
+find $CHROOT_DIR -ls
+echo
+
+# tips
+echo "additional work includes"
+echo
+
+echo "1) enable chroot in php-fpm.conf"
+cat <<'EOF'
+; Chroot to this directory at the start. This value must be defined as an
+; absolute path. When this value is not set, chroot is not used.
+; Note: you can prefix with '$prefix' to chroot to the pool prefix or one
+; of its subdirectories. If the pool prefix is not set, the global prefix
+; will be used instead.
+; Note: chrooting is a great security feature and should be used whenever
+;       possible. However, all PHP paths will be relative to the chroot
+;       (error_log, sessions.save_path, ...).
+; Default Value: not set
+EOF
+echo -e "chroot = $CHROOT_DIR"
+echo
+
+echo "2) deploy php webapp under chroot, usually "
+echo -e "# mkdir $CHROOT_DIR/myapp"
+echo -e "# tar zxf app.tar.gz -C $CHROOT_DIR/myapp"
+echo    "You may wish make the log directory owned by php process"
+echo -e "# chown nobody.nobody $CHROOT_DIR$CHROOT_DIR/applog"
+echo    "then edit php.ini to apply the trick"
+echo -e "error_log = $CHROOT_DIR/applog/php_errors.log"
+echo
+
+echo "3) nginx.conf, usually "
+echo "       root $CHROOT_DIR/myapp;"
+cat <<'EOF'
+       location ~ \.php$ {
+           fastcgi_pass   127.0.0.1:9000;
+           fastcgi_index  index.php;
+           root /myapp; # where php chroot takes over, see also fastcgi.conf
+           include  fastcgi.conf;
+       }
+EOF
+echo 'This is the fastcgi.conf trick:'
+echo ' fastcgi_param  SCRIPT_FILENAME    $document_root$fastcgi_script_name;'
+echo 'where $document_root is /myapp, $fastcgi_script_name is path in URL.'
+echo "Then PHP interpreter runs with $CHROOT_DIR as its root directory, and "
+echo "http://host/x.php is handled by $CHROOT_DIR/myapp/x.php, while static "
+echo "resources are directly served by web server."
+echo
+
+cat <<'EOF'
+4) security options for php.ini
+disable_functions = phpinfo,exec,system,passthru,shell_exec,escapeshellarg,escapeshellcmd,proc_close,proc_open,dl,popen,show_source,symlink
+expose_php = Off
+session.cookie_httponly = 1
+cgi.fix_pathinfo = 0
+request_order = GPC   # for 5.3x version security bug.
+
+5) security options for nginx.conf
+server_tokens off;
+
+EOF
+
+cat <<EOF
+
+Calling ssl secured sites via curl in an chroot env, some /usr/lib64 library was needed:
+http://jameskirsop.com/calling-ssl-secured-sites-via-curl-in-an-apache-chroot/
+
+EOF
+
+) > $CHROOT_DIR.README
+
+cat $CHROOT_DIR.README
+

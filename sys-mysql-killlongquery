@@ -12,15 +12,13 @@ Usage: [OPTION...]
 =head1 RISKS
 
   This script will kill running sql, some update/select statements 
-will be killed, connection state 'Binlog Dump', 'Connect' and 'Sleep'
-is ignored.
+will be killed, connection db is null , state in 'Binlog Dump', 
+'Connect' and 'Sleep' is ignored.
 
 =cut
 
 use strict;
 use warnings;
-use DBI;
-use DBD::mysql;
 use Getopt::Long qw(:config no_ignore_case);
 use English '-no_match_vars';
 use Data::Dumper;

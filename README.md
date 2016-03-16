@@ -257,8 +257,8 @@ kill the mysql long query's thread if query time greater than specified
 time value;
 
 *note: This script will kill running sql, some update/select statements 
-will be killed, connection state 'Binlog Dump', 'Connect' and 'Sleep'
-is ignored.
+will be killed, connection db is null , state in 'Binlog Dump', 
+'Connect' and 'Sleep' is ignored.
 
 ```
 $ ./sys-mysql-killlongquery -h 127.0.0.1 -u root --askpass -v -k -t 5

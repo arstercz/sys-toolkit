@@ -793,5 +793,6 @@ sub get_common_info($) {
     }
 
     return \%common_hash;
-
 }
+
+1;

@@ -1,0 +1,667 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-mysql-block-account -- block or release MySQL user account to disable/enable 
+                           them login.
+
+=head1 SYNOPSIS
+
+Usage:  [OPTION...]
+
+=head1 RISKS
+
+   The connect user must have create user or super privileges, the blocked
+ account can't login when this script reverse account password.
+
+   If use kill option, the process relatate to the account will be killed.
+
+=cut
+
+use strict;
+use warnings FATAL => 'all';
+use Carp;
+use Data::Dumper;
+use Getopt::Long qw(:config no_ignore_case);
+use English '-no_match_vars';
+
+my $host     = '127.0.0.1';
+my $port     = 3306;
+my $user     = 'root';
+my $password = '';
+my $askpass  = 0;
+my $database = 'information_schema';
+my $account_user;
+my $account_host;
+my $block    = 0;
+my $release  = 0;
+my $dry_run  = 0;
+my $kill     = 0;
+my $list     = 1;
+my $queit    = 0;
+my $help     = 0;
+my $verbose  = 0;
+my $charset  = 'utf8';
+
+GetOptions(
+    "host|h=s"     => \$host,
+    "port|P=i"     => \$port,
+    "user|u=s"     => \$user,
+    "password|p=s" => \$password,
+    "askpass!"     => \$askpass,
+    "database|d=s" => \$database,
+    "charset|c=s"  => \$charset,
+    "block|b!"     => \$block,
+    "release|r!"   => \$release,
+    "dry-run!"     => \$dry_run,
+    "kill|k!"      => \$kill,
+    "list|l!"      => \$list,
+    "queit|q!"     => \$queit,
+    "help!"        => \$help,
+    "verbose|v!"   => \$verbose,
+    "account_user=s" => \$account_user,
+    "account_host=s" => \$account_host,
+) or die "error:$!";
+
+if ($help) {
+    usage($0);
+}
+
+sub usage {
+    my $name = shift;
+    system("perldoc $name");
+    exit 0;
+}
+
+if ($askpass) {
+   $password = noecho_password("Enter password ");
+}
+
+if ( !$password ) {
+    warn "Can not connect to MySQL without password.";
+    usage($0);
+    exit 1;
+}
+
+# Prompt for password when connecting to MySQL
+sub noecho_password {
+    my $prompt = shift;
+    local $OUTPUT_AUTOFLUSH = 1;
+    my $response;
+    eval {
+        #use Term::ReadKey qw(ReadMode ReadKey);
+        require Term::ReadKey;
+        Term::ReadKey->import(qw( ReadMode ReadKey ));
+        if ($OSNAME =~ m/MSWin/) {
+            require Win32::Console::ANSI;
+        }
+        print "$prompt: ";
+        ReadMode('noecho');
+        $response = <STDIN>;
+        chomp($response);
+        ReadMode('normal');
+        print "\n" or die 
+            "Cannot print: $OS_ERROR";
+    };
+    if ($EVAL_ERROR) {
+        die "Cannot read respose; is Term::ReadKey installed? $EVAL_ERROR";
+    }
+    return $response;
+}
+
+# get db handle
+printf( "connect to %s, %d, %s, xxxxxxxx ...\n", $host, $port, $user )
+  if $verbose;
+my $dbpre = MySQL::dbh->new(
+    host     => $host,
+    port     => $port,
+    user     => $user,
+    password => $password,
+    charset  => $charset,
+    driver   => 'mysql',
+);
+my $dbh = $dbpre->get_dbh( $database, { AutoCommit => 1 } ) or 
+                             die "Can't get dbh.. $host:$port";
+# get db info
+my $dbhelper  = MySQL::DBHelper->new( dbh => $dbh );
+
+if ($list) {
+   my $userstatus = $dbhelper->account_status($account_user, $account_host);
+   printf( "get %s status ..\n", $account_user ) if $verbose;
+   foreach my $user (@$userstatus) {
+       print "$user\n";
+   }
+}
+
+
+# ###################################################################
+# Documentation.
+# ###################################################################
+
+=head1 OPTIONS
+
+=over 4
+
+=item host | H
+
+MySQL host address, default value is '127.0.0.1'
+
+=item port | P
+
+MySQL port number. default value is 3306
+
+=item user | u
+
+MySQL username. default value is monitor
+
+=item password | p
+
+MySQL user password. no default value.
+
+=item askpass
+
+prompt for password options when connect to MySQL.
+
+=item database | D
+
+MySQL database will be used, default is 'information_schema'.
+
+
+=item charset | A
+
+The character used when connect to MySQL, default value is UTF8.
+
+=item debug | d
+
+print debug info.
+
+=item help | h
+
+print help info.
+
+=back
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut
+
+package MySQL::dbh;
+
+# Get the database handle which user use, and this database
+# handle object should be destroy when leave MySQL database.
+use strict;
+use warnings FATAL => 'all';
+use constant PTDEBUG => $ENV{PTDEBUG} || 0;
+use English qw(-no_match_vars);
+use DBI;
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+
+use Data::Dumper;
+$Data::Dumper::Indent    = 1;
+$Data::Dumper::Sortkeys  = 1;
+$Data::Dumper::Quotekeys = 0;
+
+require Exporter;
+@ISA     = qw(Exporter);
+@EXPORT  = qw( get_dbh disconnect );
+$VERSION = '0.1.0';
+
+eval { require DBI; };
+
+if ($@) {
+    die "Cannot connect to MySQL because the Perl DBI module is not "
+      . "installed or not found.  Run 'perl -MDBI' to see the directories "
+      . "that Perl searches for DBI.  If DBI is not installed, try:\n"
+      . "  Debian/Ubuntu  apt-get install libdbi-perl\n"
+      . "  RHEL/CentOS    yum install perl-DBI\n"
+      . "  OpenSolaris    pkg install pkg:/SUNWpmdbi\n";
+}
+
+sub host {
+    my $self = shift;
+    $self->{host} = shift if @_;
+    return $self->{host};
+}
+
+sub port {
+    my $self = shift;
+    $self->{port} = shift if @_;
+    return $self->{port};
+}
+
+sub user {
+    my $self = shift;
+    $self->{user} = shift if @_;
+    return $self->{user};
+}
+
+sub password {
+    my $self = shift;
+    $self->{password} = shift if @_;
+    return $self->{password};
+}
+
+sub charset {
+    my $self = shift;
+    $self->{charset} = shift if @_;
+    return $self->{charset};
+}
+
+sub driver {
+    my $self = shift;
+    $self->{driver} = shift if @_;
+    return $self->{driver};
+}
+
+sub new {
+    my ( $class, %args ) = @_;
+    my @required_args = qw(host port user password);
+    PTDEBUG && print Dumper(%args);
+
+    foreach my $arg (@required_args) {
+        warn "I need a $arg argument" unless $args{$arg};
+    }
+
+    my $self = {};
+    bless $self, $class;
+
+    # options should be used.
+    $self->host( $args{'host'}         || 127.0.0.1 );
+    $self->port( $args{'port'}         || 3306 );
+    $self->user( $args{'user'}         || 'audit' );
+    $self->password( $args{'password'} || '' );
+    $self->charset( $args{'charset'}   || 'utf8' );
+    $self->driver( $args{'driver'}     || 'mysql' );
+
+    return $self;
+}
+
+sub get_dbh {
+    my ( $self, $database, $opts ) = @_;
+    $opts ||= {};
+    my $host     = $self->{host};
+    my $port     = $self->{port};
+    my $user     = $self->{user};
+    my $password = $self->{password};
+    my $charset  = $self->{charset};
+    my $driver   = $self->{driver};
+
+    my $defaults = {
+        AutoCommit         => 0,
+        RaiseError         => 1,
+        PrintError         => 0,
+        ShowErrorStatement => 1,
+        mysql_enable_utf8  => ( $charset =~ m/utf8/i ? 1 : 0 ),
+    };
+    @{$defaults}{ keys %$opts } = values %$opts;
+
+    #if ( $opts->{mysql_use_result} ) {
+    #    $defaults->{mysql_use_result} = 1;
+    #}
+
+    my $dbh;
+    my $tries = 2;
+    while ( !$dbh && $tries-- ) {
+        PTDEBUG
+          && print Dumper(
+            join( ', ', map { "$_=>$defaults->{$_}" } keys %$defaults ) );
+        $dbh = eval {
+            DBI->connect(
+                "DBI:$driver:database=$database;host=$host;port=$port",
+                $user, $password, $defaults );
+        };
+
+        if ( !$dbh && $@ ) {
+            if ( $@ =~ m/locate DBD\/mysql/i ) {
+                warn
+"Cannot connect to MySQL because the Perl DBD::mysql module is "
+                  . "not installed or not found.  Run 'perl -MDBD::mysql' to see "
+                  . "the directories that Perl searches for DBD::mysql.  If "
+                  . "DBD::mysql is not installed, try:\n"
+                  . "  Debian/Ubuntu  apt-get install libdbd-mysql-perl\n"
+                  . "  RHEL/CentOS    yum install perl-DBD-MySQL\n"
+                  . "  OpenSolaris    pgk install pkg:/SUNWapu13dbd-mysql\n";
+            }
+            elsif ( $@ =~ m/not a compiled character set|character set utf8/i )
+            {
+                PTDEBUG && print 'Going to try again without utf8 support\n';
+                delete $defaults->{mysql_enable_utf8};
+            }
+            if ( !$tries ) {
+                warn "$@";
+                return;
+            }
+
+        }
+    }
+
+    if ( $driver =~ m/mysql/i ) {
+        my $sql;
+        $sql = 'SELECT @@SQL_MODE';
+        PTDEBUG && print "+-- $sql\n";
+
+        my ($sql_mode) = eval { $dbh->selectrow_array($sql) };
+        warn "Error getting the current SQL_MORE: $@" if $@;
+
+        if ($charset) {
+            $sql = qq{/*!40101 SET NAMES "$charset"*/};
+            PTDEBUG && print "+-- $sql\n";
+            eval { $dbh->do($sql) };
+            warn "Error setting NAMES to $charset: $@" if $@;
+            PTDEBUG && print "Enabling charset to STDOUT\n";
+            if ( $charset eq 'utf8' ) {
+                binmode( STDOUT, ':utf8' )
+                  or warn "Can't binmode(STDOUT, ':utf8'): $!\n";
+            }
+            else {
+                binmode(STDOUT) or warn "Can't binmode(STDOUT): $!\n";
+            }
+        }
+
+        $sql =
+            'SET @@SQL_QUOTE_SHOW_CREATE = 1'
+          . '/*!40101, @@SQL_MODE=\'NO_AUTO_VALUE_ON_ZERO'
+          . ( $sql_mode ? ",$sql_mode" : '' ) . '\'*/';
+        PTDEBUG && print "+-- $sql\n";
+        eval { $dbh->do($sql) };
+        warn "Error setting SQL_QUOTE_SHOW_CREATE, SQL_MODE"
+          . ( $sql_mode ? " and $sql_mode" : '' ) . ": $@"
+          if $@;
+    }
+
+    if (PTDEBUG) {
+        print Dumper(
+            $dbh->selectrow_hashref(
+'SELECT DATABASE(), CONNECTION_ID(), VERSION()/*!50038, @@hostname*/'
+            )
+        );
+        print "+-- 'Connection info:', $dbh->{mysql_hostinfo}\n";
+        print Dumper(
+            $dbh->selectall_arrayref(
+                "SHOW VARIABLES LIKE 'character_set%'",
+                { Slice => {} }
+            )
+        );
+        print '+-- $DBD::mysql::VERSION:' . "$DBD::mysql::VERSION\n";
+        print '+-- $DBI::VERSION:' . "$DBI::VERSION\n";
+    }
+    return $dbh;
+}
+
+# handle should be destroy.
+sub disconnect {
+    my ( $self, $dbh ) = @_;
+    PTDEBUG && $self->print_active_handles( $self->get_dbh );
+    $dbh->disconnect;
+}
+
+sub print_active_handles {
+    my ( $self, $thing, $level ) = @_;
+    $level ||= 0;
+    printf(
+        "# Active %sh: %s %s %s\n",
+        ( $thing->{Type} || 'undef' ),
+        "\t" x $level,
+        $thing,
+        ( ( $thing->{Type} || '' ) eq 'st' ? $thing->{Statement} || '' : '' )
+    ) or warn "Cannot print: $OS_ERROR";
+    foreach my $handle ( grep { defined } @{ $thing->{ChildHandles} } ) {
+        $self->print_active_handles( $handle, $level + 1 );
+    }
+}
+
+1;
+
+package MySQL::DBHelper;
+use strict;
+use warnings FATAL => 'all';
+use English qw(-no_match_vars);
+use Carp qw(croak);
+use Data::Dumper;
+
+use constant Set_Password_SQL => "SET PASSWORD FOR ?\@? = ?";
+use constant Show_Processlist_SQL   => "SHOW PROCESSLIST";
+use constant Old_Password_Length          => 16;
+use constant Blocked_Empty_Password       => '?' x 41;
+use constant Blocked_Old_Password_Head    => '~' x 25;
+use constant Blocked_New_Password_Regexp  => qr/^[0-9a-fA-F]{40}\*$/o;
+use constant Released_New_Password_Regexp => qr/^\*[0-9a-fA-F]{40}$/o;
+
+# http://code.openark.org/blog/mysql/blocking-user-accounts
+sub new {
+    my ( $class, %args ) = @_;
+    my @required_args = qw(dbh);
+    foreach my $arg (@required_args) {
+        die "I need a $arg argument" unless $args{$arg};
+    }
+    my $self = {
+        dbh           => undef,
+    };
+    bless $self, $class;
+    $self->{dbh} = $args{'dbh'};
+    return $self;
+}
+
+sub _blocked_password($) {
+    my $password = shift;
+    if ( $password eq '' ) {
+        return Blocked_Empty_Password;
+    }
+    elsif ( length($password) == Old_Password_Length ) {
+        return Blocked_Old_Password_Head . $password;
+    }
+    elsif ( $password =~ Released_New_Password_Regexp ) {
+        return join( "", reverse( split(//, $password) ) );
+    }
+    else {
+        return;
+    }
+}
+
+sub _released_password($) {
+    my $password = shift;
+    if ( $password eq Blocked_Empty_Password ) {
+        return '';
+    }
+    elsif ( index( $password, Blocked_Old_Password_Head ) == 0 ) {
+        return substr( $password, length(Blocked_Old_Password_Head) );
+    }
+    elsif ( $password =~ Blocked_New_Password_Regexp ) {
+        return join( "", reverse( split(//, $password) ) );
+    }
+    else {
+        return;
+    }
+}
+
+sub _get_query_list($$) {
+   my ($account_user, $account_host) = @_;
+   my $query = "SELECT user, host, password FROM mysql.user";
+   if ($account_user) {
+       $query .= " WHERE user = ?";
+       if (length($account_host) > 0) {
+           $query .= " AND host = ?";
+       }
+   }
+   $query .= " ORDER BY user,host";
+   return $query;
+}
+
+sub _block_release_user_by_select($$$$) {
+    my ( $dbh, $account_user, $account_host, $block ) = @_;
+    my $query = _get_query_list($account_user, $account_host);
+    my $user_to_block = 
+       $dbh->selectall_arrayref( $query, '', undef, $user, $host );
+
+    eval{
+        foreach my $userinfo (@$user_to_block) {
+            my $password = $block
+                 ? _blocked_password( $userinfo->[2] )
+                 : _released_password( $userinfo->[2] );
+
+            if( defined $password ) {
+                my $ret = 
+                   $dbh->do( Set_Password_SQL, undef, $userinfo->[0], 
+                           $userinfo->[1], $password ) ||
+                           warn $dbh->errstr;
+            }
+        }
+     };
+
+     if( $@ ) {
+        return 0; # failure
+     }
+     return 1; # success
+}
+
+sub block_user_host($$$) {
+   my ( $self, $user, $host ) = @_;
+   return _block_release_user_by_select( $self->{dbh}, $user, $host, 1 );
+}
+
+sub release_user_host {
+   my( $self, $user, $host ) = @_;
+   return _block_release_user_by_select( $self->{dbh}, $user, $host, 0 );
+}
+
+sub is_empty_password($$) {
+    my( $self, $password ) = @_;
+    if( length($password) == 0 || 
+        $password eq Blocked_Empty_Password ) {
+        return 1;
+    }
+    return 0;
+}
+
+sub _is_blocked_password($) {
+    my( $password ) = @_;
+    if( $password eq Blocked_Empty_Password ) {
+        return 1;
+    }
+    elsif( index( $password, Blocked_Old_Password_Head ) == 0 ) {
+        return 1;
+    }
+    elsif( $password =~ Blocked_New_Password_Regexp ) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
+}
+
+sub account_status($$$) {
+   my ($self, $account_user, $account_host) = @_;
+   my $query = _get_query_list($account_user, $account_host);
+   my $user_info = 
+      $self->{dbh}->selectall_arrayref( $query, undef, $account_user, $account_host );
+
+   my @userstatus;
+   foreach my $user (@$user_info) {
+      if( _is_blocked_password($user->[2]) ) {
+          push @userstatus, "the $user->[0]\@$user->[1] in blocked status\n";
+      }
+      else {
+          push @userstatus, "the $user->[0]\@$user->[1] in released status\n";
+      }
+   }
+
+   return \@userstatus;
+}
+
+sub _is_ip_type($) {
+   my $host = shift;
+   my $ip_re = qr/[0-9]|[0-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]/;
+   if( $host =~ /^$ip_re\.$ip_re\.$ip_re\.$ip_re$/ ) {
+      return 1;
+   }
+   else {
+      return 0;
+   }
+}
+
+sub _is_host_in_account($$) {
+    my $account = shift;
+    my $host = shift;
+
+    my @account_items = split(/\./, $account);
+    my @host_items    = split(/\./, $host);
+
+    # samples, as host is ip address or dns name:
+    # 10.1.1.15 in 10.%, 10.1.% or 10.1.1.%
+    # wo.ip.com in %.ip.com 
+    # wo.ip.com in wo.ip.%
+    # wo.ip.com not in %.ip.com.cn
+    # wo.ip.com.cn not in %.ip.com
+    my $is_ip = _is_ip_type($host);
+
+    if( '%' ne substr($host, -1, 1) ) {
+        return 0 if @account_items + 0 != @host_items;
+    }
+
+    # compare the two arrays
+    for( my $i = 0; $i < @host_items; $i ++ ) {
+       $account_items[$i] 
+                ||= $is_ip
+                ? '%'
+                : '';
+
+       if ( $account_items[$i] ne $host_items[$i] ) {
+           if ( $account_items[$i] ne '%' ) {
+               return 0; # host not in account
+           }
+       }
+    }
+
+    return 1; # host in account
+}
+
+sub _get_blocked_acount_thread($$$) {
+    my $dbh = shift;
+    my $account_user = shift;
+    my $account_host = shift;
+    my @threads;
+
+    my $sth = $dbh->prepare(Show_Processlist_SQL);
+    $sth->execute;
+
+    while ( my $ref = $sth->fetchrow_hashref() ) {
+        my $id         = $ref->{Id};
+        my $user       = $ref->{User};
+        my $host       = (split(/:/, $ref->{Host}))[0];
+
+        if( $user eq $account_user ) {
+            if ( $account_host eq $host 
+                || _is_host_in_account($account_host, $host) ) {
+
+                push( @threads, $id );
+            }
+        }
+    }
+    return \@threads;
+}
+
+sub kill_blocked_account_thread($$$) {
+   my ($self, $account_user, $account_host) = @_;
+   my $thread_ref = 
+      _get_blocked_acount_thread($dbh, $account_user, $account_host);
+   eval{
+      for my $thread (@$thread_ref) {
+          $self->{dbh}->do("KILL ?", undef, $thread);
+      }
+   };
+   if ($@) {
+      warn "kill connections error: $@";
+   }
+   else {
+      print "kill " . @{$thread_ref} + 0 . " connections" .
+            "for $account_user\@$account_host";
+   }
+}
+
+1;

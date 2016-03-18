@@ -83,6 +83,16 @@ if ( !$password ) {
     exit 1;
 }
 
+if( ( $list || $block || $release ) == 0 ) {
+    print "one of the options list, block or release should be true\n";
+    exit 1;
+}
+
+if( (($list & $block) == 1) || (($list & $release) == 1) ) {
+    print "disable list option\n" if $verbose;
+    $list = 0;
+}
+
 # Prompt for password when connecting to MySQL
 sub noecho_password {
     my $prompt = shift;
@@ -161,19 +171,19 @@ if ($release) {
 
 =over 4
 
-=item host | H
+=item host=s | H
 
 MySQL host address, default value is '127.0.0.1'
 
-=item port | P
+=item port=i | P
 
 MySQL port number. default value is 3306
 
-=item user | u
+=item user=s | u
 
 MySQL username. default value is monitor
 
-=item password | p
+=item password=s | p
 
 MySQL user password. no default value.
 
@@ -181,20 +191,56 @@ MySQL user password. no default value.
 
 prompt for password options when connect to MySQL.
 
-=item database | D
+=item database=s | D 
 
 MySQL database will be used, default is 'information_schema'.
 
 
-=item charset | A
+=item charset=s | A
 
 The character used when connect to MySQL, default value is UTF8.
 
-=item debug | d
+=item verbose | d
 
-print debug info.
+print more detailed info.
 
-=item help | h
+=item account-user=s
+
+the account username that you want to block/release, is equal to
+mysql.user table's User field.
+
+=item account-host=s
+
+the account host that you want to block/release, is equal to
+mysql.user table's Host field.
+
+=item block | b
+
+either block account or not.
+
+=item release | r
+
+either release account or not.
+
+=item dry-run
+
+script does not execute any update sql, just print detailed sql that 
+would be execute if enable dry-run.
+
+=item kill
+
+either kill account process in MySQL or not.
+
+=item list
+
+get account user status.
+
+=item queit
+
+script will set sql_log_bin off if you enable queit, this can be 
+useful when you don't want update replicate to slave.
+
+=item help
 
 print help info.
 
@@ -516,7 +562,7 @@ sub _block_release_user_by_select($$$$$) {
     my ( $dbh, $account_user, $account_host, $block, $dry_run ) = @_;
     my $query = _get_query_list($account_user, $account_host);
     my $user_to_block = 
-       $dbh->selectall_arrayref( $query, '', undef, $user, $host );
+       $dbh->selectall_arrayref( $query, undef, $account_user, $account_host );
 
     eval{
         foreach my $userinfo (@$user_to_block) {
@@ -544,9 +590,11 @@ sub _block_release_user_by_select($$$$$) {
                    $dbh->do( Set_Password_SQL, undef, $userinfo->[0], 
                            $userinfo->[1], $password ) ||
                            warn $dbh->errstr;
+                   printf("SET PASSWORD FOR %s@%s ok\n", 
+                       $userinfo->[0], $userinfo->[1]);
                 }
                 else {
-                   printf("[dry-run] SET PASSWORD FOR %s@%s = %s", 
+                   printf("[dry-run] SET PASSWORD FOR %s@%s = %s\n", 
                        $userinfo->[0], $userinfo->[1], $password);
                 }
             }
@@ -669,7 +717,7 @@ sub _get_blocked_acount_thread($$$) {
             if ( $account_host eq $host 
                 || _is_host_in_account($account_host, $host) ) {
 
-                push( @threads, $id );
+                push( @threads, [$id, $user, $host] );
             }
         }
     }
@@ -683,20 +731,18 @@ sub kill_blocked_account_thread($$$) {
    eval{
          for my $thread (@$thread_ref) {
              unless( $dry_run ) {
-                $self->{dbh}->do("KILL ?", undef, $thread);
+                $self->{dbh}->do("KILL ?", undef, $thread->[0]);
+                print "kill " . @{$thread_ref} . " connections " .
+                               "for $thread->[1]\@$thread->[2]\n";
              }
              else {
                 printf("[dry-run] KILL thread %d for %s@%s\n", 
-                     $thread, $account_user, $account_host);
+                     $thread->[0], $thread->[1], $thread->[2]);
              }
          }
    };
    if ($@) {
       warn "kill connections error: $@";
-   }
-   else {
-      print "kill " . @{$thread_ref} + 0 . " connections" .
-            "for $account_user\@$account_host";
    }
 }
 

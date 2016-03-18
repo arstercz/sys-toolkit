@@ -203,7 +203,7 @@ END
 ```
 help message: $ ./sys-mem-redis-summary --help
 
-## sys-mysql-killblockthread
+## sys-mysql-kill-blocked-thread
 
 `type: perl`
 
@@ -243,7 +243,7 @@ bash
 ```
 Can be used without args
 
-## sys-mysql-killlongquery
+## sys-mysql-kill-long-query
 
 `type: perl`
 

@@ -207,12 +207,12 @@ print more detailed info.
 =item account-user=s
 
 the account username that you want to block/release, is equal to
-mysql.user table's User field.
+mysql.user table's User field. this must be specified.
 
 =item account-host=s
 
 the account host that you want to block/release, is equal to
-mysql.user table's Host field.
+mysql.user table's Host field. leave blank to apply all hosts.
 
 =item block | b
 

@@ -157,19 +157,19 @@ foreach my $thread (sort keys %threads) {
 
 =over 4
 
-=item host | H
+=item host=s | H
 
 MySQL host address, default value is '127.0.0.1'
 
-=item port | P
+=item port=i | P
 
 MySQL port number. default value is 3306
 
-=item user | u
+=item user=s | u
 
 MySQL username. default value is monitor
 
-=item password | p
+=item password=s | p
 
 MySQL user password. no default value.
 
@@ -177,11 +177,11 @@ MySQL user password. no default value.
 
 prompt for password options when connect to MySQL.
 
-=item database | D
+=item database=s | D
 
 MySQL database will be used, default is 'information_schema'.
 
-=item charset | A
+=item charset=s | A
 
 The character used when connect to MySQL, default value is UTF8.
 
@@ -189,7 +189,7 @@ The character used when connect to MySQL, default value is UTF8.
 
 kill the long running sql thread.
 
-=item threthold|t
+=item threthold=i | t
 
 kill the sql which running time greater than specified value.
 

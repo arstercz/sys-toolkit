@@ -32,12 +32,12 @@ my $password = '';
 my $askpass  = 0;
 my $database = 'information_schema';
 my $account_user;
-my $account_host;
+my $account_host = "";
 my $block    = 0;
 my $release  = 0;
 my $dry_run  = 0;
 my $kill     = 0;
-my $list     = 1;
+my $list     = 0;
 my $queit    = 0;
 my $help     = 0;
 my $verbose  = 0;
@@ -122,6 +122,12 @@ my $dbpre = MySQL::dbh->new(
 );
 my $dbh = $dbpre->get_dbh( $database, { AutoCommit => 1 } ) or 
                              die "Can't get dbh.. $host:$port";
+# disable sql log bin to avoid replicate to slave.
+if($queit) {
+   print "set session sql_log_bin = 0" if $verbose;
+   $dbh->do("SET session sql_log_bin = 0") or warn $dbh->errstr;
+}
+
 # get db info
 my $dbhelper  = MySQL::DBHelper->new( dbh => $dbh );
 
@@ -129,10 +135,23 @@ if ($list) {
    my $userstatus = $dbhelper->account_status($account_user, $account_host);
    printf( "get %s status ..\n", $account_user ) if $verbose;
    foreach my $user (@$userstatus) {
-       print "$user\n";
+       print "user status: $user\n";
    }
+   exit 0;
 }
 
+if ($block) {
+   if($kill) {
+      $dbhelper->kill_blocked_account_thread($account_user, 
+                                             $account_host, $dry_run);
+   }
+
+   $dbhelper->block_user_host($account_user, $account_host, $dry_run);
+}
+
+if ($release) {
+   $dbhelper->release_user_host($account_user, $account_host, $dry_run);
+}
 
 # ###################################################################
 # Documentation.
@@ -493,23 +512,43 @@ sub _get_query_list($$) {
    return $query;
 }
 
-sub _block_release_user_by_select($$$$) {
-    my ( $dbh, $account_user, $account_host, $block ) = @_;
+sub _block_release_user_by_select($$$$$) {
+    my ( $dbh, $account_user, $account_host, $block, $dry_run ) = @_;
     my $query = _get_query_list($account_user, $account_host);
     my $user_to_block = 
        $dbh->selectall_arrayref( $query, '', undef, $user, $host );
 
     eval{
         foreach my $userinfo (@$user_to_block) {
+            if( _is_blocked_password($userinfo->[2]) ) {
+                if( $block ) {
+                    printf("[block] %s@%s already blocked\n", 
+                           $userinfo->[0], $userinfo->[1]);
+                    next;
+                }
+            }
+            else {
+                if ( !$block ) {
+                    printf("[release] %s@%s already released\n",
+                           $userinfo->[0], $userinfo->[1]);
+                    next;
+                }
+            }
+
             my $password = $block
                  ? _blocked_password( $userinfo->[2] )
                  : _released_password( $userinfo->[2] );
 
             if( defined $password ) {
-                my $ret = 
+                unless($dry_run) { 
                    $dbh->do( Set_Password_SQL, undef, $userinfo->[0], 
                            $userinfo->[1], $password ) ||
                            warn $dbh->errstr;
+                }
+                else {
+                   printf("[dry-run] SET PASSWORD FOR %s@%s = %s", 
+                       $userinfo->[0], $userinfo->[1], $password);
+                }
             }
         }
      };
@@ -520,23 +559,14 @@ sub _block_release_user_by_select($$$$) {
      return 1; # success
 }
 
-sub block_user_host($$$) {
-   my ( $self, $user, $host ) = @_;
-   return _block_release_user_by_select( $self->{dbh}, $user, $host, 1 );
+sub block_user_host($$$$) {
+   my ( $self, $user, $host, $dry_run ) = @_;
+   return _block_release_user_by_select( $self->{dbh}, $user, $host, 1, $dry_run );
 }
 
-sub release_user_host {
-   my( $self, $user, $host ) = @_;
-   return _block_release_user_by_select( $self->{dbh}, $user, $host, 0 );
-}
-
-sub is_empty_password($$) {
-    my( $self, $password ) = @_;
-    if( length($password) == 0 || 
-        $password eq Blocked_Empty_Password ) {
-        return 1;
-    }
-    return 0;
+sub release_user_host($$$$) {
+   my( $self, $user, $host, $dry_run ) = @_;
+   return _block_release_user_by_select( $self->{dbh}, $user, $host, 0, $dry_run );
 }
 
 sub _is_blocked_password($) {
@@ -647,13 +677,19 @@ sub _get_blocked_acount_thread($$$) {
 }
 
 sub kill_blocked_account_thread($$$) {
-   my ($self, $account_user, $account_host) = @_;
+   my ($self, $account_user, $account_host, $dry_run) = @_;
    my $thread_ref = 
       _get_blocked_acount_thread($dbh, $account_user, $account_host);
    eval{
-      for my $thread (@$thread_ref) {
-          $self->{dbh}->do("KILL ?", undef, $thread);
-      }
+         for my $thread (@$thread_ref) {
+             unless( $dry_run ) {
+                $self->{dbh}->do("KILL ?", undef, $thread);
+             }
+             else {
+                printf("[dry-run] KILL thread %d for %s@%s\n", 
+                     $thread, $account_user, $account_host);
+             }
+         }
    };
    if ($@) {
       warn "kill connections error: $@";

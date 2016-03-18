@@ -320,8 +320,13 @@ them login.
 
 
 #### note
-this will set sql_log_bin off if you enable queit option, this can be 
-useful when you don't want the password changed replicate to slave.
+   The connect user must have create user or super privileges, the blocked
+ account can't login when this script reverse account password.
+
+   If use kill option, the process relatate to the account will be killed.
+
+   this will set sql_log_bin off if you enable queit option, this can be 
+ useful when you don't want the password changed replicate to slave.
 
 #### samples
 block account with dry-run:

@@ -318,6 +318,12 @@ help message: `Usage: ./sys-ipton --help`
 block or release MySQL user account to disable/enable 
 them login.
 
+#### Dependency
+```
+DBI
+DBD::mysql
+perl-TermReadKey (if enable askpass option)
+```
 
 #### note
    The connect user must have create user or super privileges, the blocked

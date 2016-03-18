@@ -310,6 +310,68 @@ both ipv4 address and number is not allowed
 ```
 
 help message: `Usage: ./sys-ipton --help`
+
+## sys-mysql-block-account
+
+`type: perl`
+
+block or release MySQL user account to disable/enable 
+them login.
+
+
+#### note
+this will set sql_log_bin off if you enable queit option, this can be 
+useful when you don't want the password changed replicate to slave.
+
+#### samples
+block account with dry-run:
+```
+$ ./sys-mysql-block-account --host 10.0.15.5 --user=root --askpass --account_user='spider' --account_host='10.0.15.%' --verbose --block --kill --dry-run
+Enter password : 
+connect to 10.0.15.5, 3306, root, xxxxxxxx ...
+[dry-run] KILL thread 3867 for spider@10.0.15.7
+[dry-run] SET PASSWORD FOR spider@10.0.15.% = 19E32FB52598AF5B642ACEB857CFC344F27D1664*
+```
+block account:
+```
+
+$ ./sys-mysql-block-account --host 10.0.15.5 --user=root --askpass --account_user='spider' --account_host='10.0.15.%'  --verbose --block --kill
+Enter password : 
+connect to 10.0.15.5, 3306, root, xxxxxxxx ...
+kill 1 connections for spider@10.0.15.7
+SET PASSWORD FOR spider@10.0.15.% ok
+```
+Then the spider user password was reversed in MySQL:
+```
++----------------------------------------------------------------------------------------------------------------+
+| Grants for spider@10.0.15.%                                                                                    |
++----------------------------------------------------------------------------------------------------------------+
+| GRANT USAGE ON *.* TO 'spider'@'10.0.15.%' IDENTIFIED BY PASSWORD '*9E32FB52598AF5B642ACEB857CFC344F27D166D3'  |
+| GRANT SELECT, INSERT, UPDATE, DELETE ON `spider`.* TO 'spider'@'10.0.15.%'                                     |
++----------------------------------------------------------------------------------------------------------------+
+```
+re-execute block, the following message occured:
+```
+[block] spider@10.0.15.% already blocked
+```
+```
+$ ./sys-mysql-block-account --host 10.0.15.5 --user=root --askpass --account_user='spider' --account_host='10.0.15.%'  --verbose --release --kill
+Enter password : 
+connect to 10.0.15.5, 3306, root, xxxxxxxx ...
+SET PASSWORD FOR spider@10.0.15.% ok
+```
+spider user password is normal:
+```
++----------------------------------------------------------------------------------------------------------------+
+| Grants for spider@10.0.15.%                                                                                    |
++----------------------------------------------------------------------------------------------------------------+
+| GRANT USAGE ON *.* TO 'spider'@'10.0.15.%' IDENTIFIED BY PASSWORD '*4661D72F443CFC758BECA246B5FA89525BF23E91'  |
+| GRANT SELECT, INSERT, UPDATE, DELETE ON `spider`.* TO 'spider'@'10.0.15.%'                                     |
++----------------------------------------------------------------------------------------------------------------+
+```
+
+help message: `Usage: ./sys-mysql-block-account --help`
+
 ## License
 
 MIT / BSD

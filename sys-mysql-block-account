@@ -566,8 +566,16 @@ sub _get_query_list($$) {
 sub _block_release_user_by_select($$$$$) {
     my ( $dbh, $account_user, $account_host, $block, $dry_run ) = @_;
     my $query = _get_query_list($account_user, $account_host);
-    my $user_to_block = 
-       $dbh->selectall_arrayref( $query, undef, $account_user, $account_host );
+    my $user_to_block = do {
+          if( length($account_host) > 0 ) {
+             $dbh->selectall_arrayref( $query, undef, 
+                                    $account_user, $account_host );
+          }
+          else {
+             $dbh->selectall_arrayref( $query, undef, 
+                                    $account_user);
+          }
+       };
 
     eval{
         foreach my $userinfo (@$user_to_block) {
@@ -643,11 +651,11 @@ sub account_status($$$) {
    my $query = _get_query_list($account_user, $account_host);
    my $user_info = do {
           if( length($account_host) > 0 ) {
-           return $self->{dbh}->selectall_arrayref( $query, undef, 
+             $self->{dbh}->selectall_arrayref( $query, undef, 
                                     $account_user, $account_host );
           }
           else {
-           return $self->{dbh}->selectall_arrayref( $query, undef, 
+             $self->{dbh}->selectall_arrayref( $query, undef, 
                                     $account_user);
           }
        };

@@ -83,6 +83,11 @@ if ( !$password ) {
     exit 1;
 }
 
+if ( !$account_user ) {
+    print "account_user must be specified.\n";
+    exit 1;
+}
+
 if( ( $list || $block || $release ) == 0 ) {
     print "one of the options list, block or release should be true\n";
     exit 1;
@@ -171,7 +176,7 @@ if ($release) {
 
 =over 4
 
-=item host=s | H
+=item host=s | h
 
 MySQL host address, default value is '127.0.0.1'
 
@@ -636,9 +641,16 @@ sub _is_blocked_password($) {
 sub account_status($$$) {
    my ($self, $account_user, $account_host) = @_;
    my $query = _get_query_list($account_user, $account_host);
-   my $user_info = 
-      $self->{dbh}->selectall_arrayref( $query, undef, $account_user, $account_host );
-
+   my $user_info = do {
+          if( length($account_host) > 0 ) {
+           return $self->{dbh}->selectall_arrayref( $query, undef, 
+                                    $account_user, $account_host );
+          }
+          else {
+           return $self->{dbh}->selectall_arrayref( $query, undef, 
+                                    $account_user);
+          }
+       };
    my @userstatus;
    foreach my $user (@$user_info) {
       if( _is_blocked_password($user->[2]) ) {

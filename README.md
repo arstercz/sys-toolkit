@@ -383,6 +383,23 @@ spider user password is normal:
 
 help message: `Usage: ./sys-mysql-block-account --help`
 
+## sys-lock-run
+
+`type: shell`
+bash script or command can only run once at any time by using flock
+
+```
+1. run command in session A
+$ ./sys-lock-run sleep 20
+
+2. run command in session B
+# ./sys-lock-run sleep 20
+2016_03_23_12_44_13 [warn] Only once can run at one time - sleep
+```
+
+note: as use flock, this tool will create lock file in /tmp dirs and 
+delete lock file when exit.
+
 ## License
 
 MIT / BSD

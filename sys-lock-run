@@ -64,7 +64,7 @@ main() {
    LOCK_FILE="$LOCK_DIR/$OPT_COMMAND.lock-run"
 
    exec_lock $LOCK_FD $LOCK_FILE $flockcmd || {
-       warn "Only once can run at one time when use: $OPT_COMMAND"
+       warn "Only once can run at one time - $OPT_COMMAND"
    }
 
    "$@"

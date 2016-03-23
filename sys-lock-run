@@ -1,0 +1,81 @@
+#!/bin/bash
+# script/command to be run once when the lock is archieved.
+# zhe.chen<chenzhe07@gmail.com>
+
+# Global function
+ts() {
+   TS=$(date +%F-%T | tr ':-' '_')
+   echo "$TS $*"
+}
+log() {
+   ts "[info] $*" 
+}
+warn() {
+   ts "[warn] $*" >&2
+   exit 1
+}
+
+# check command or script exist
+exist_check() {
+   [ "/usr/bin/which $1 2>/dev/null" ] || [ "/bin/ls $1" = $1 ]
+}
+
+is_sourced() {
+   [ "${0##*/}" = "sys-lock-run" ] || [ "${0##/}" = "bash" -a "$_" = "$0" ]
+}
+
+exec_lock() {
+   local fd=$1
+   fd="${fd:-2}"
+   local lock_file=$2
+   flockcmd=$3
+
+   # create lock file
+   eval "exec $fd>$lock_file"
+
+   # acquier lock, timeout when execute then 1 second
+   $flockcmd -w 1 -x -n $fd && {
+      return 0
+   } || {
+      return 1
+   }
+}
+
+# Run the program
+main() {
+   if [ $# -eq 0 ]; then
+       echo "Usage: sys-lock-run command/script ..."
+       exit 2;
+   fi
+
+   if ! $(exist_check $OPT_COMMAND); then
+       warn "can not find $OPT_COMMAND"
+   fi
+
+   flockcmd=$(which flock)
+   if [ ! -x $flockcmd ]; then
+      echo "can not find flock command or with no permission"
+      exit 2
+   fi
+
+   readonly OPT_COMMAND=$1
+   LOCK_DIR="/tmp"
+   LOCK_FD=200
+   LOCK_FILE="$LOCK_DIR/$OPT_COMMAND.lock-run"
+
+   exec_lock $LOCK_FD $LOCK_FILE $flockcmd || {
+       warn "Only once can run at one time when use: $OPT_COMMAND"
+   }
+
+   "$@"
+
+   if [ -e $LOCK_FILE ]; then
+       unlink $LOCK_FILE
+   fi
+}
+
+if is_sourced; then
+    OUTPUT=$(main "$@")
+    echo "${OUTPUT}"
+    exit 0
+fi

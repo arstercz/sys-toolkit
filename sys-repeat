@@ -1,0 +1,16 @@
+#!/bin/bash
+# Repeat execute command until it failure.
+# zhe.chen<chenzhe07@gmail.com>
+
+exec 2>&1
+
+if [ $# -eq 0 ]; then
+   echo "Usage: sys-repeat command.."
+fi
+
+"$@"
+
+# test status for repeat
+while [ $? -eq 0 ]; do
+    "$@"
+done

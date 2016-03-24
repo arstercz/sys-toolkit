@@ -386,6 +386,7 @@ help message: `Usage: ./sys-mysql-block-account --help`
 ## sys-lock-run
 
 `type: shell`
+
 bash script or command can only run once at any time by using flock
 
 ```
@@ -400,6 +401,25 @@ $ ./sys-lock-run sleep 20
 note: as use flock, this tool will create lock file in /tmp dirs and 
 delete lock file when exit.
 
+## sys-repeat
+
+`type: shell`
+
+execute one command repeatedly until it failure.
+
+```
+$ ./sys-repeat ls -hl sys-checkport
+-rwxr-xr-x. 1 root root 1.9K Feb 29 17:10 sys-checkport
+-rwxr-xr-x. 1 root root 1.9K Feb 29 17:10 sys-checkport
+-rwxr-xr-x. 1 root root 1.9K Feb 29 17:10 sys-checkport
+-rwxr-xr-x. 1 root root 1.9K Feb 29 17:10 sys-checkport
+-rwxr-xr-x. 1 root root 1.9K Feb 29 17:10 sys-checkport
+-rwxr-xr-x. 1 root root 1.9K Feb 29 17:10 sys-checkport
+...
+...
+```
+
+help message: ./sys-repeat command ...
 ## License
 
 MIT / BSD

@@ -6,11 +6,13 @@ exec 2>&1
 
 if [ $# -eq 0 ]; then
    echo "Usage: sys-repeat command.."
+   exit 1
 fi
 
 "$@"
 
 # test status for repeat
 while [ $? -eq 0 ]; do
+    sleep 0.5
     "$@"
 done

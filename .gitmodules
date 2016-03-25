@@ -1,3 +1,6 @@
 [submodule "mysql_health"]
 	path = mysql_health
 	url = https://github.com/chenzhe07/mysql_health.git
+[submodule "mysql_repl_discovery"]
+	path = mysql_repl_discovery
+	url = https://github.com/chenzhe07/mysql_repl_discovery.git

@@ -1,0 +1,3 @@
+[submodule "mysql_health"]
+	path = mysql_health
+	url = https://github.com/chenzhe07/mysql_health.git

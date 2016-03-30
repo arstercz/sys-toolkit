@@ -31,10 +31,12 @@
 #define STAY_ALIVE_OPTION   'h'
 #define HELP_OPTION         'i'
 #define VERSION_OPTION      'j'
+#define DAEMON_OPTION       'k'
 
 #define PATH_SEPARATOR '/'
 
 const char *name;
+static char *pid_file_name = NULL;
 
 int build_server(void);
 int wait_for_clients(void);
@@ -62,6 +64,7 @@ struct struct_settings {
 	unsigned int bind_address : 1;
 	unsigned int buffer_size  : 1;
 	unsigned int fork         : 1;
+        unsigned int daemon       : 1;
 	unsigned int log          : 1;
 	unsigned int stay_alive   : 1;
 };
@@ -97,6 +100,7 @@ static struct option long_options[] = {
 	{ "buffer-size",   required_argument, NULL, BUFFER_SIZE_OPTION },
         { "fork",          no_argument,       NULL, FORK_OPTION},
 	{ "log",           no_argument,       NULL, LOG_OPTION },
+        { "daemon",        no_argument,       NULL, DAEMON_OPTION},
 	{ "stay-alive",    no_argument,       NULL, STAY_ALIVE_OPTION },
 	{ "help",          no_argument,       NULL, HELP_OPTION },
 	{ "version",       no_argument,       NULL, VERSION_OPTION },
@@ -111,6 +115,11 @@ int main(int argc, char *argv[])
    if (build_server() == 1)
    {
       exit(1);
+   }
+
+   if (settings.daemon)
+   {
+      daemon(0, 0);
    }
 
    do
@@ -184,6 +193,11 @@ void set_options(int argc, char *argv[])
           {
              settings.log = 1;
              break;
+          }
+
+          case DAEMON_OPTION:
+          {
+             settings.daemon = 1;
           }
 
           case STAY_ALIVE_OPTION:
@@ -470,6 +484,7 @@ Options:\n\
   --bind-address=IP    bind address\n\
   --buffer-size=BYTES  buffer size\n\
   --log\n\
+  --daemon\n\
   --stay-alive\n\n");
 }
 

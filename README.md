@@ -447,6 +447,7 @@ Options:
   --bind-address=IP    bind address
   --buffer-size=BYTES  buffer size
   --log
+  --daemon
   --stay-alive
 
 1. in session A, start a proxy:

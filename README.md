@@ -420,6 +420,45 @@ $ ./sys-repeat ls -hl sys-checkport
 ```
 
 help message: ./sys-repeat command ...
+
+## sys-tcp-port-proxy
+
+`type: c`
+
+A simple TCP port forwarder. (fork from tcptunnel)
+
+#### How to build
+
+``$ gcc -o sys-tcp-port-proxy sys-tcp-port-proxy.c``
+
+### Usage
+
+```
+$ ./sys-tcp-port-proxy --help
+Usage: ./sys-tcp-port-proxy [options]
+
+Options:
+  --version
+  --help
+
+  --local-port=PORT    local port
+  --remote-port=PORT   remote port
+  --remote-host=HOST   remote host
+  --bind-address=IP    bind address
+  --buffer-size=BYTES  buffer size
+  --log
+  --stay-alive
+
+1. in session A, start a proxy:
+$ ./sys-tcp-port-proxy --local-port=13306 --remote-port=3306 --remote-host=127.0.0.1 --fork
+
+2. in session B, login with mysql:
+$ mysql -h 127.0.0.1 -P 13306 -uroot -p
+
+3. session A output the connection:
+tcp proxy > 2016-03-30 15:07:02: request from 127.0.0.1
+```
+
 ## License
 
 MIT / BSD

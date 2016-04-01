@@ -168,7 +168,7 @@ foreach my $thread (keys %thread_id) {
 
 =over 4
 
-=item host=s | H
+=item host=s | h
 
 MySQL host address, default value is '127.0.0.1'
 
@@ -208,7 +208,7 @@ kill the sql which blocking times greater than specified times.
 
 print debug info.
 
-=item help | h
+=item help
 
 print help info.
 

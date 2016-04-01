@@ -157,7 +157,7 @@ foreach my $thread (sort keys %threads) {
 
 =over 4
 
-=item host=s | H
+=item host=s | h
 
 MySQL host address, default value is '127.0.0.1'
 
@@ -197,7 +197,7 @@ kill the sql which running time greater than specified value.
 
 print verbose info.
 
-=item help | h
+=item help
 
 print help info.
 

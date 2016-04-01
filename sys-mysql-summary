@@ -137,7 +137,7 @@ print_info($host_info);
 
 =over 4
 
-=item host=s | H
+=item host=s | h
 
 MySQL host address, default value is '127.0.0.1'
 
@@ -170,7 +170,7 @@ The character used when connect to MySQL, default value is UTF8.
 
 print debug info.
 
-=item help | h
+=item help
 
 print help info.
 

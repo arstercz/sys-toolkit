@@ -1,0 +1,620 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-mysql-createdb - create mysql database with account user.
+
+=head1 SYNOPSIS
+
+Usage: [OPTION...]
+
+=head1 RISKS
+
+Connect user should be have create, create user, grant option 
+and show databases privileges.
+
+This will check privileges, replicate rules.
+  
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long qw(:config no_ignore_case);
+use English '-no_match_vars';
+use Data::Dumper;
+
+my $host     = '127.0.0.1';
+my $port     = 3306;
+my $user     = 'root';
+my $password = '';
+my $askpass  = 0;
+my $database = 'information_schema';
+my $charset  = 'utf8';
+my $verbose  = 0;
+my $help     = 0;
+my $createdb = '';
+my $account_user;
+my $account_host = 'localhost';
+my $account_pass;
+
+GetOptions(
+    "host|h=s"     => \$host,
+    "port|P=i"     => \$port,
+    "user|u=s"     => \$user,
+    "password|p=s" => \$password,
+    "askpass!"     => \$askpass,
+    "database|d=s" => \$database,
+    "charset|c=s"  => \$charset,
+    "verbose|v!"   => \$verbose,
+    "help!"        => \$help,
+    "createdb=s"   => \$createdb,
+    "account-user=s" => \$account_user,
+    "account-host=s" => \$account_host,
+    "account-pass=s" => \$account_pass,
+) or die "option err: $!";
+
+if ($help) {
+    usage($0);
+}
+
+sub usage {
+    my $name = shift;
+    system("perldoc $name");
+    exit 0;
+}
+
+if ($askpass) {
+   $password = noecho_password("Enter password ");
+}
+
+if ( !$password ) {
+    warn "Can not connect to MySQL without password.";
+    usage($0);
+    exit 1;
+}
+
+if ( !$createdb ) {
+   warn "option --createdb should be specified the create database name\n";
+   exit 1;
+}
+
+if ( !$account_user ) {
+   warn "option --account-user should be specified the account user\n";
+   exit 1;
+}
+
+sub noecho_password {
+    my $prompt = shift;
+    local $OUTPUT_AUTOFLUSH = 1;
+    my $response;
+    eval {
+        require Term::ReadKey;
+        Term::ReadKey->import(qw( ReadMode ReadKey ));
+        if ($OSNAME =~ m/MSWin/) {
+            require Win32::Console::ANSI;
+        }
+        print "$prompt: ";
+        ReadMode('noecho');
+        $response = <STDIN>;
+        chomp($response);
+        ReadMode('normal');
+        print "\n" or die 
+            "Cannot print: $OS_ERROR";
+    };
+    if ($EVAL_ERROR) {
+        die "Cannot read respose; is Term::ReadKey installed? $EVAL_ERROR";
+    }
+    return $response;
+}
+
+sub check_grant {
+   my ($dbh, $item) = @_;
+   my $sql_check = "SHOW GRANTS FOR CURRENT_USER";
+   
+   my %priv_hash = (
+      'ALL'          => 'ALL PRIVILEGES',
+      'Create_priv'  => 'CREATE',
+      'Show_db_priv' => 'SHOW DATABASES',
+      'Grant_priv'   => 'GRANT OPTION',
+      'Create_user_priv' => 'CREATE USER',
+   );
+
+   my $priv_ref;
+   eval{
+       $priv_ref = $dbh->selectall_arrayref($sql_check);
+   };
+   if($@) {
+       warn "check_grant err: $@";
+       return 0;
+   }
+
+   foreach my $list (@$priv_ref) {
+      my ($privs) = @$list;
+      if ($item eq 'Grant_priv') {
+          if ( index($privs, $priv_hash{$item}) > 0 ) {
+              return 1;
+          }
+      }
+      else {
+          if ( (index($privs, $priv_hash{$item}) > 0) ||
+               (index($privs, $priv_hash{'ALL'}) > 0) )
+          {
+              return 1;
+          }
+      }
+   }
+
+   return 0;
+}
+
+sub binlog_db {
+   my $dbh = shift;
+   my $sql_info = $dbh->selectrow_hashref("show master status");
+
+   my %binlog_hash;
+   if ( length($sql_info->{Binlog_Do_DB}) ) {
+      $binlog_hash{'Binlog_Do_DB'} 
+                    = $sql_info->{Binlog_Do_DB};
+   }
+   elsif ( length($sql_info->{Binlog_Ignore_DB}) ) {
+      $binlog_hash{'Binlog_Ignore_DB'}
+                    = $sql_info->{Binlog_Ignore_DB};
+   }
+   else {
+   }
+
+   return %binlog_hash;
+}
+
+sub create_database {
+   my ($dbh, $createdb) = @_;
+   if (!check_grant($dbh, 'Create_priv')) {
+       print "[WARN] login user $user\@$host has no Create_priv, skip ..\n"
+             . ' ' x 4
+             . "+-- Execute manually: create database if not exists $createdb\n";
+       return 0;
+   }
+   my %binlog_info = binlog_db($dbh);
+
+   if (exists $binlog_info{'Binlog_Do_DB'}) {
+     if( grep { $_ eq $database } 
+            split(/,/, $binlog_info{'Binlog_Do_DB'})
+      ) {
+         eval {
+            print "SQL: create database if not exists $createdb\n" if $verbose;
+            $dbh->do("create database if not exists $createdb");
+         };
+         if ($@) {
+            print "createdb error: $@";
+            return 0;
+         }
+         else {
+            return 1;
+         }
+      }
+      else {
+         print "ERROR:\n\tThe $database not in Binlog_Do_DB: "
+               . $binlog_info{'Binlog_Do_DB'} . "\n"
+               . "\tmaybe missing the slave update. "
+               . "specify the option --database value "
+               . "that is in Binlog_Do_DB list\n";
+         return 0;
+      }
+   }
+
+   if (exists $binlog_info{'Binlog_Ignore_DB'}) {
+      unless( grep {$_ eq $database }
+            split(/,/, $binlog_info{'Binlog_Ignore_DB'}) 
+      ) {
+         eval {
+            print "SQL: create database if not exists $createdb\n" if $verbose;
+            $dbh->do("create database if not exists $createdb");
+         };
+         if ($@) {
+            print "createdb error: $@";
+            return 0;
+         }
+         else {
+            return 1;
+         }
+      }
+      else {
+         print "ERROR: \n\tThe $database is in the Binlog_Ignore_DB: "
+               . $binlog_info{'Binlog_Ignore_DB'} . "\n"
+               . "\tmaybe missing the slave update. "
+               . "specify the option --database value "
+               . "that is not in Binlog_Ignore_DB list\n";
+         return 0;
+      }
+   }
+}
+
+sub grant_user {
+   my ($dbh, $account_user, $account_host, $account_pass) = @_;
+   my $set_user_sql =
+      sprintf("CREATE USER %s\@\'%s\' IDENTIFIED BY \'%s\'",
+              $account_user, $account_host, $account_pass);
+   my $set_priv_sql =
+      sprintf("GRANT select, update, delete, insert ON %s.* TO %s\@'%s'",
+             $createdb, $account_user, $account_host);
+   printf("SQL: %s\n     %s\n", $set_user_sql, $set_priv_sql) if $verbose;
+
+
+   my $check_info = 
+   eval {
+      if (check_grant($dbh, 'Create_user_priv')) {
+          $dbh->do($set_user_sql) or warn $dbh->errstr;
+      }
+      else {
+          print "[WARN] login user $user\@$host has no Create_user_priv, skip ..\n"
+                . ' ' x 4
+                . "+-- Execute manually: $set_user_sql\n";
+          return 0;
+      }
+
+      if (check_grant($dbh, 'Grant_priv')) {
+          $dbh->do($set_priv_sql) or warn $dbh->errstr;
+      }
+      else {
+         print "[WARN] login user $user\@$host has no Grant_priv, skip ..\n"
+               . ' ' x 4
+               . "+-- Execute manually: $set_priv_sql\n";
+         return 0;
+      }
+   };
+
+   if ($@) {
+      print "grant user error: $@";
+      return 0;
+   }
+   else {
+      return 1;
+   }
+}
+
+# get db handle
+printf( "connect to %s, %d, %s, xxxxxxxx ...\n", $host, $port, $user )
+  if $verbose;
+my $dbpre = MySQL::dbh->new(
+    host     => $host,
+    port     => $port,
+    user     => $user,
+    password => $password,
+    charset  => $charset,
+    driver   => 'mysql',
+);
+
+my $dbh = $dbpre->get_dbh( $database, { AutoCommit => 1 } ) or
+                            die "Can't get dbh.. $host:$port";
+
+if (!check_grant($dbh, 'Show_db_priv')) {
+   print "[warn] login user $user\@$host has no Show_db_priv\n";
+   exit 1;
+}
+
+my @dbs = $dbh->func('_ListDBs');
+
+if( grep { $_ eq $createdb } @dbs ) {
+   print "Already exist database: $createdb\n";
+   exit 0;
+}
+else {
+   print "database list: " . join("\n\t", @dbs) . "\n" if $verbose;
+   if (create_database($dbh, $createdb)) {
+      $account_pass ||= sprintf( "%s",
+                           join("", map{
+                              ("a".."z", "A".."Z", 
+                                0 .. 9, "+", "-", "_", "@",
+                                "!", "~", "^", "%", "{", "}",
+                              )[rand 72] 
+                            } 1..20) 
+                        );
+      if (grant_user($dbh, $account_user, $account_host, $account_pass) )
+      {
+         print "create database and user:\n"
+               . "\thost: $host\n"
+               . "\tport: $port\n"
+               . "\tdb  : $createdb\n"
+               . "\tuser: $account_user\n"
+               . "\tpass: $account_pass\n";
+      }
+   }
+}
+
+# ###################################################################
+# Documentation.
+# ###################################################################
+
+=head1 OPTIONS
+
+=over 4
+
+=item host=s | H
+
+MySQL host address, default value is '127.0.0.1'
+
+=item port=i | P
+
+MySQL port number. default value is 3306
+
+=item user=s | u
+
+MySQL username. default value is monitor
+
+=item password=s | p
+
+MySQL user password. no default value.
+
+=item askpass
+
+prompt for password options when connect to MySQL.
+
+=item database=s | D
+
+MySQL database will be used, default is 'information_schema'.
+
+=item charset=s | A
+
+The character used when connect to MySQL, default value is UTF8.
+
+=item threthold=i | t
+
+kill the sql which blocking times greater than specified times.
+
+=item verbose|v
+
+print debug info.
+
+=item help
+
+print help info.
+
+=item account-user=s
+
+account user name will be create, can not be null.
+
+=item account-host=s
+
+account user host will be create, default is localhost.
+
+=item account-pass=s
+
+account user password, will be generate 20 length random chars if no value.
+
+=back
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut
+
+package MySQL::dbh;
+# Get the database handle which user use, and this database
+# handle object should be destroy when leave MySQL database.
+
+use strict;
+use warnings FATAL => 'all';
+use constant PTDEBUG => $ENV{PTDEBUG} || 0;
+use English qw(-no_match_vars);
+use DBI;
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+
+use Data::Dumper;
+$Data::Dumper::Indent    = 1;
+$Data::Dumper::Sortkeys  = 1;
+$Data::Dumper::Quotekeys = 0;
+
+require Exporter;
+@ISA     = qw(Exporter);
+@EXPORT  = qw( get_dbh disconnect );
+$VERSION = '0.1.0';
+
+eval { require DBI; };
+
+if ($@) {
+    die "Cannot connect to MySQL because the Perl DBI module is not "
+      . "installed or not found.  Run 'perl -MDBI' to see the directories "
+      . "that Perl searches for DBI.  If DBI is not installed, try:\n"
+      . "  Debian/Ubuntu  apt-get install libdbi-perl\n"
+      . "  RHEL/CentOS    yum install perl-DBI\n"
+      . "  OpenSolaris    pkg install pkg:/SUNWpmdbi\n";
+}
+
+sub host {
+    my $self = shift;
+    $self->{host} = shift if @_;
+    return $self->{host};
+}
+
+sub port {
+    my $self = shift;
+    $self->{port} = shift if @_;
+    return $self->{port};
+}
+
+sub user {
+    my $self = shift;
+    $self->{user} = shift if @_;
+    return $self->{user};
+}
+
+sub password {
+    my $self = shift;
+    $self->{password} = shift if @_;
+    return $self->{password};
+}
+
+sub charset {
+    my $self = shift;
+    $self->{charset} = shift if @_;
+    return $self->{charset};
+}
+
+sub driver {
+    my $self = shift;
+    $self->{driver} = shift if @_;
+    return $self->{driver};
+}
+
+sub new {
+    my ( $class, %args ) = @_;
+    my @required_args = qw(host port user password);
+    PTDEBUG && print Dumper(%args);
+
+    foreach my $arg (@required_args) {
+        warn "I need a $arg argument" unless $args{$arg};
+    }
+
+    my $self = {};
+    bless $self, $class;
+
+    # options should be used.
+    $self->host( $args{'host'}         || 127.0.0.1 );
+    $self->port( $args{'port'}         || 3306 );
+    $self->user( $args{'user'}         || 'audit' );
+    $self->password( $args{'password'} || '' );
+    $self->charset( $args{'charset'}   || 'utf8' );
+    $self->driver( $args{'driver'}     || 'mysql' );
+
+    return $self;
+}
+
+sub get_dbh {
+    my ( $self, $database, $opts ) = @_;
+    $opts ||= {};
+    my $host     = $self->{host};
+    my $port     = $self->{port};
+    my $user     = $self->{user};
+    my $password = $self->{password};
+    my $charset  = $self->{charset};
+    my $driver   = $self->{driver};
+
+    my $defaults = {
+        AutoCommit         => 0,
+        RaiseError         => 1,
+        PrintError         => 0,
+        ShowErrorStatement => 1,
+        mysql_enable_utf8  => ( $charset =~ m/utf8/i ? 1 : 0 ),
+    };
+    @{$defaults}{ keys %$opts } = values %$opts;
+
+    if ( $opts->{mysql_use_result} ) {
+        $defaults->{mysql_use_result} = 1;
+    }
+
+    my $dbh;
+    my $tries = 2;
+    while ( !$dbh && $tries-- ) {
+        PTDEBUG
+          && print Dumper(
+            join( ', ', map { "$_=>$defaults->{$_}" } keys %$defaults ) );
+        $dbh = eval {
+            DBI->connect(
+                "DBI:$driver:database=$database;host=$host;port=$port",
+                $user, $password, $defaults );
+        };
+
+        if ( !$dbh && $@ ) {
+            if ( $@ =~ m/locate DBD\/mysql/i ) {
+                warn
+                  "Cannot connect to MySQL because the Perl DBD::mysql module is "
+                  . "not installed or not found.  Run 'perl -MDBD::mysql' to see "
+                  . "the directories that Perl searches for DBD::mysql.  If "
+                  . "DBD::mysql is not installed, try:\n"
+                  . "  Debian/Ubuntu  apt-get install libdbd-mysql-perl\n"
+                  . "  RHEL/CentOS    yum install perl-DBD-MySQL\n"
+                  . "  OpenSolaris    pgk install pkg:/SUNWapu13dbd-mysql\n";
+            }
+            elsif ( $@ =~ m/not a compiled character set|character set utf8/i )
+            {
+                PTDEBUG && print 'Going to try again without utf8 support\n';
+                delete $defaults->{mysql_enable_utf8};
+            }
+            if ( !$tries ) {
+                warn "$@";
+                return;
+            }
+       }
+    }
+
+    if ( $driver =~ m/mysql/i ) {
+        my $sql;
+        $sql = 'SELECT @@SQL_MODE';
+        PTDEBUG && print "+-- $sql\n";
+
+        my ($sql_mode) = eval { $dbh->selectrow_array($sql) };
+        warn "Error getting the current SQL_MORE: $@" if $@;
+
+        if ($charset) {
+            $sql = qq{/*!40101 SET NAMES "$charset"*/};
+            PTDEBUG && print "+-- $sql\n";
+            eval { $dbh->do($sql) };
+            warn "Error setting NAMES to $charset: $@" if $@;
+            PTDEBUG && print "Enabling charset to STDOUT\n";
+            if ( $charset eq 'utf8' ) {
+                binmode( STDOUT, ':utf8' )
+                  or warn "Can't binmode(STDOUT, ':utf8'): $!\n";
+            }
+            else {
+                binmode(STDOUT) or warn "Can't binmode(STDOUT): $!\n";
+            }
+        }
+
+        $sql =
+            'SET @@SQL_QUOTE_SHOW_CREATE = 1'
+          . '/*!40101, @@SQL_MODE=\'NO_AUTO_VALUE_ON_ZERO'
+          . ( $sql_mode ? ",$sql_mode" : '' ) . '\'*/';
+        PTDEBUG && print "+-- $sql\n";
+        eval { $dbh->do($sql) };
+        warn "Error setting SQL_QUOTE_SHOW_CREATE, SQL_MODE"
+          . ( $sql_mode ? " and $sql_mode" : '' ) . ": $@"
+          if $@;
+    }
+
+    if (PTDEBUG) {
+        print Dumper(
+            $dbh->selectrow_hashref(
+'SELECT DATABASE(), CONNECTION_ID(), VERSION()/*!50038, @@hostname*/'
+            )
+        );
+        print "+-- 'Connection info:', $dbh->{mysql_hostinfo}\n";
+        print Dumper(
+            $dbh->selectall_arrayref(
+                "SHOW VARIABLES LIKE 'character_set%'",
+                { Slice => {} }
+            )
+        );
+        print '+-- $DBD::mysql::VERSION:' . "$DBD::mysql::VERSION\n";
+        print '+-- $DBI::VERSION:' . "$DBI::VERSION\n";
+    }
+    return $dbh;
+}
+
+# handle should be destroy.
+sub disconnect {
+    my ( $self, $dbh ) = @_;
+    PTDEBUG && $self->print_active_handles( $self->get_dbh );
+    $dbh->disconnect;
+}
+
+sub print_active_handles {
+    my ( $self, $thing, $level ) = @_;
+    $level ||= 0;
+    printf(
+        "# Active %sh: %s %s %s\n",
+        ( $thing->{Type} || 'undef' ),
+        "\t" x $level,
+        $thing,
+        ( ( $thing->{Type} || '' ) eq 'st' ? $thing->{Statement} || '' : '' )
+    ) or warn "Cannot print: $OS_ERROR";
+    foreach my $handle ( grep { defined } @{ $thing->{ChildHandles} } ) {
+        $self->print_active_handles( $handle, $level + 1 );
+    }
+}
+
+1;

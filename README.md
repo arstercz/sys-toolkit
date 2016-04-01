@@ -460,6 +460,73 @@ $ mysql -h 127.0.0.1 -P 13306 -uroot -p
 tcp proxy > 2016-03-30 15:07:02: request from 127.0.0.1
 ```
 
+## sys-mysql-createdb
+
+`type: perl`
+
+create mysql database with account user.
+
+Connect user should be have create, create user, grant option and show databases privileges.
+
+
+#### This tool will check privileges and replicate rules.
+
+#### Usage
+
+Check replication rule:
+```
+$ perl sys-mysql-createdb --host 127.0.0.1 --user root --database mysql  --askpass --createdb=test3 --account-user=user_test1 --account-host='10.0.21.%'
+Enter password : 
+ERROR: 
+	The mysql is in the Binlog_Ignore_DB: mysql,test,information_schema,performance_schema
+	maybe missing the slave update. specify the option --database value that is not in Binlog_Ignore_DB list
++-- database list: 
+	information_schema
+	cztest
+	dashboard
+	db1
+        ...
+        ...
+```
+
+Check user login privileges, grant maybe skip when login user has no privileges, default value of account-pass is random charaters
+```
+$ perl sys-mysql-createdb --host 127.0.0.1 --user root --database test1  --askpass --createdb=test3 --account-user=user_test1 --account-host='10.0.21.%' --priv="select, insert" --verbose
+Enter password : 
+connect to 127.0.0.1, 3306, root, xxxxxxxx ...
+SQL: create database if not exists test3
+SQL: CREATE USER user_test1@'10.0.21.%' IDENTIFIED BY 'XmhdGEZZ1KN{_fW0g3U}'
+     GRANT select, insert ON test3.* TO user_test1@'10.0.21.%'
+[WARN] login user root@127.0.0.1 has no Grant_priv, skip ..
+    +-- Execute manually: GRANT select, insert ON test3.* TO user_test1@'10.0.21.%'
+create database and user:
+	host: 127.0.0.1
+	port: 3306
+	db  : test3
+	user: user_test1
+	pass: XmhdGEZZ1KN{_fW0g3U}
+```
+
+Create database and user ok.
+```
+$ perl sys-mysql-createdb --host 127.0.0.1 --user root --database test1  --askpass --createdb=test3 --account-user=user_test1 --account-host='10.0.21.%' --priv="select, insert" --verbose
+Enter password : 
+connect to 127.0.0.1, 3306, root, xxxxxxxx ...
+SQL: create database if not exists test3
+SQL: CREATE USER user_test1@'10.0.21.%' IDENTIFIED BY 'VyhQWQCeaKxZJrroeNVP'
+     GRANT select, insert ON test3.* TO user_test1@'10.0.21.%'
+create database and user:
+	host: 127.0.0.1
+	port: 3306
+	db  : test3
+	user: user_test1
+	pass: VyhQWQCeaKxZJrroeNVP
+ 
+$ perl sys-mysql-createdb --host 127.0.0.1 --user root --database test1  --askpass --createdb=test3 --account-user=user_test1 --account-host='10.0.21.%' --priv="select, insert" --verbose
+Enter password : 
+Already exist database: test3
+```
+
 ## License
 
 MIT / BSD

@@ -200,7 +200,7 @@ sub create_database {
                . "\tmaybe missing the slave update. "
                . "specify the option --database value "
                . "that is in Binlog_Do_DB list\n"
-               . "+-- database list: " . join("\n\t", @$dbs) . "\n";
+               . "+-- database list: \n\t" . join("\n\t", @$dbs) . "\n";
          return 0;
       }
    }
@@ -227,7 +227,7 @@ sub create_database {
                . "\tmaybe missing the slave update. "
                . "specify the option --database value "
                . "that is not in Binlog_Ignore_DB list\n"
-               . "+-- database list: " . join("\n\t", @$dbs) . "\n";
+               . "+-- database list: \n\t" . join("\n\t", @$dbs) . "\n";
          return 0;
       }
    }

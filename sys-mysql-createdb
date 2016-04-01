@@ -36,6 +36,7 @@ my $createdb = '';
 my $account_user;
 my $account_host = 'localhost';
 my $account_pass;
+my $priv     = 'SELECT, DELETE, INSERT, UPDATE';
 
 GetOptions(
     "host|h=s"     => \$host,
@@ -51,6 +52,7 @@ GetOptions(
     "account-user=s" => \$account_user,
     "account-host=s" => \$account_host,
     "account-pass=s" => \$account_pass,
+    "priv=s"         => \$priv,
 ) or die "option err: $!";
 
 if ($help) {
@@ -167,7 +169,7 @@ sub binlog_db {
 }
 
 sub create_database {
-   my ($dbh, $createdb) = @_;
+   my ($dbh, $createdb, $dbs) = @_;
    if (!check_grant($dbh, 'Create_priv')) {
        print "[WARN] login user $user\@$host has no Create_priv, skip ..\n"
              . ' ' x 4
@@ -197,7 +199,8 @@ sub create_database {
                . $binlog_info{'Binlog_Do_DB'} . "\n"
                . "\tmaybe missing the slave update. "
                . "specify the option --database value "
-               . "that is in Binlog_Do_DB list\n";
+               . "that is in Binlog_Do_DB list\n"
+               . "+-- database list: " . join("\n\t", @$dbs) . "\n";
          return 0;
       }
    }
@@ -223,7 +226,8 @@ sub create_database {
                . $binlog_info{'Binlog_Ignore_DB'} . "\n"
                . "\tmaybe missing the slave update. "
                . "specify the option --database value "
-               . "that is not in Binlog_Ignore_DB list\n";
+               . "that is not in Binlog_Ignore_DB list\n"
+               . "+-- database list: " . join("\n\t", @$dbs) . "\n";
          return 0;
       }
    }
@@ -235,7 +239,7 @@ sub grant_user {
       sprintf("CREATE USER %s\@\'%s\' IDENTIFIED BY \'%s\'",
               $account_user, $account_host, $account_pass);
    my $set_priv_sql =
-      sprintf("GRANT select, update, delete, insert ON %s.* TO %s\@'%s'",
+      sprintf("GRANT $priv ON %s.* TO %s\@'%s'",
              $createdb, $account_user, $account_host);
    printf("SQL: %s\n     %s\n", $set_user_sql, $set_priv_sql) if $verbose;
 
@@ -299,8 +303,7 @@ if( grep { $_ eq $createdb } @dbs ) {
    exit 0;
 }
 else {
-   print "database list: " . join("\n\t", @dbs) . "\n" if $verbose;
-   if (create_database($dbh, $createdb)) {
+   if (create_database($dbh, $createdb, \@dbs)) {
       $account_pass ||= sprintf( "%s",
                            join("", map{
                               ("a".."z", "A".."Z", 
@@ -363,7 +366,7 @@ kill the sql which blocking times greater than specified times.
 
 =item verbose|v
 
-print debug info.
+print more detailed info. database list, SQL info will display.
 
 =item help
 
@@ -380,6 +383,10 @@ account user host will be create, default is localhost.
 =item account-pass=s
 
 account user password, will be generate 20 length random chars if no value.
+
+=item priv=s
+
+account user privileges, default is SELECT, DELETE, UPDATE, INSERT .
 
 =back
 

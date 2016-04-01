@@ -468,6 +468,12 @@ create mysql database with account user.
 
 Connect user should be have create, create user, grant option and show databases privileges.
 
+#### Dependency
+```
+DBI
+DBD::mysql
+perl-TermReadKey (if enable askpass option)
+```
 
 #### This tool will check privileges and replicate rules.
 

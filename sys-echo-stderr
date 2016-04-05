@@ -1,0 +1,19 @@
+#!/bin/bash
+# echo message to STDERR
+# zhe.chen<chenzhe07@gmail.com>
+
+#exec 2>&1
+
+if [ $# -eq 0 ]; then
+   echo "Usage: sys-echo-stderr msg1 msg2 ..."
+fi
+
+echocmd=$(which echo)
+if [ ! -x $echocmd ]; then
+   echo "can not find echo command or has no permission"
+   exit 1
+fi
+
+$echocmd $* 1>&2
+
+exit $?

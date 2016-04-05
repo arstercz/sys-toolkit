@@ -533,6 +533,17 @@ Enter password :
 Already exist database: test3
 ```
 
+## sys-echo-stderr
+
+`type: shell`
+echo message to STDERR.
+
+#### Usage:
+```
+$ ./sys-echo-stderr hello world >1.txt 
+hello world
+```
+
 ## License
 
 MIT / BSD

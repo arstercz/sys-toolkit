@@ -268,7 +268,7 @@ sub grant_user {
    };
 
    if ($@) {
-      print "grant user error: $@";
+      print "grant user error, maybe the $account_user\@$account_host was exist:  $@";
       return 0;
    }
    else {
@@ -320,9 +320,29 @@ else {
                . "\tdb  : $createdb\n"
                . "\tuser: $account_user\n"
                . "\tpass: $account_pass\n";
+
+         my $db_checkpre = MySQL::dbh->new(
+             host => $host,
+             port => $port,
+             user => $account_user,
+             password => $account_pass,
+             charset  => $charset,
+             driver   => 'mysql',
+         );
+         my $dbh_check = $db_checkpre->get_dbh( $createdb, { AutoCommit => 1 } ) or
+                            die "Can't get dbh ... $host:$port";
+
+         my $info = $dbh_check->selectrow_hashref("select 1") or
+                            die $dbh_check->errstr;
+         if ( defined $info->{'1'} && $info->{'1'} ) {
+             print "The user $account_user\@$account_host connect ok\n";
+             $dbh_check->disconnect();
+         }
       }
    }
 }
+
+$dbh->disconnect();
 
 # ###################################################################
 # Documentation.

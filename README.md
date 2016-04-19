@@ -2,7 +2,32 @@
 
 Some useful scripts to sysadmins/dbas.
 
-## sys-genpass
+Table of Contents
+=================
+
+* [sys-genpass](#sys-genpass)
+* [sys-nton](#sys-nton)
+* [sys-pubip](#sys-pubip)
+* [sys-ascii](#sys-ascii)
+* [sys-ipton](#sys-ipton)
+* [sys-lock-run](#sys-lock-run)
+* [sys-repeat](#sys-repeat)
+* [sys-checkport](#sys-checkport)
+* [sys-echo-stderr](#sys-echo-stderr)
+* [sys-php-chroot](#sys-php-chroot)
+* [sys-tcp-port-proxy](#sys-tcp-port-proxy)
+* [sys-shell-type](#sys-shell-type)
+* [sys-mem-redis-summary](#sys-mem-redis-summary)
+* [sys-mysql-summary](#sys-mysql-summary)
+* [sys-mysql-adj](#sys-mysql-adj)
+* [sys-mysql-kill-blocked-thread](#sys-mysql-kill-blocked-thread)
+* [sys-mysql-kill-long-query](#sys-mysql-kill-long-query)
+* [sys-mysql-block-account](#sys-mysql-block-account)
+* [sys-mysql-createdb](#sys-mysql-createdb)
+* [sys-mysql-qps](#sys-mysql-qps)
+
+sys-genpass
+===========
 
 `type: perl`
 
@@ -15,7 +40,8 @@ IEZQS_hW7=exO}JG@L
 ```
 help message: ./sys-genpass --help 
 
-## sys-nton
+sys-nton
+========
 
 `type: perl`
 
@@ -46,7 +72,8 @@ $ ./sys-nton -n 0x0F
 ```
 help message: ./sys-nton --help
 
-## sys-pubip
+sys-pubip
+=========
 
 `type: shell`
 
@@ -58,7 +85,8 @@ Get public ip address:
 ```
 Can be used without args, return error if execute 5 seconds.
 
-## sys-ascii
+sys-ascii
+=========
 
 `type: perl`
 
@@ -89,7 +117,8 @@ $ ./sys-ascii
 
 Can be used without args.
 
-## sys-mysql-summary
+sys-mysql-summary
+================
 
 `type: perl`
 
@@ -121,7 +150,8 @@ Enter password :
 
 help message: $ ./sys-mysql-summary --help
 
-## sys-checkport
+sys-checkport
+=============
 
 `type: perl`
 
@@ -143,7 +173,8 @@ port 2000: open | filtered -- udp port has no response
 
 help message: $ ./sys-checkport --help
 
-## sys-mysql-adj
+sys-mysql-adj
+=============
 
 `type: shell`
 
@@ -160,7 +191,8 @@ no MySQL process
 ```
 Can be used without args.
 
-## sys-mem-redis-summary
+sys-mem-redis-summary
+=====================
 
 `type: perl`
 
@@ -203,7 +235,8 @@ END
 ```
 help message: $ ./sys-mem-redis-summary --help
 
-## sys-mysql-kill-blocked-thread
+sys-mysql-kill-blocked-thread
+=============================
 
 `type: perl`
 
@@ -232,7 +265,8 @@ kill 100251 ok.
 
 help message: $ ./sys-mysql-killblockthread --help
 
-## sys-shell-type
+sys-shell-type
+==============
 
 `type: shell`
 
@@ -243,7 +277,8 @@ bash
 ```
 Can be used without args
 
-## sys-mysql-kill-long-query
+sys-mysql-kill-long-query
+=========================
 
 `type: perl`
 
@@ -256,9 +291,11 @@ perl-TermReadKey (if enable askpass option)
 kill the mysql long query's thread if query time greater than specified 
 time value;
 
-*note: This script will kill running sql, some update/select statements 
+``
+note: This script will kill running sql, some update/select statements 
 will be killed, connection db is null , state in 'Binlog Dump', 
 'Connect' and 'Sleep' is ignored.
+``
 
 ```
 $ ./sys-mysql-killlongquery -h 127.0.0.1 -u root --askpass -v -k -t 5
@@ -269,7 +306,8 @@ kill 92 ok
 ```
 help message: $ ./sys-mysql-killlongquery --help
 
-## sys-php-chroot
+sys-php-chroot
+=============
 
 `type: shell`
 
@@ -289,7 +327,8 @@ http://jameskirsop.com/calling-ssl-secured-sites-via-curl-in-an-apache-chroot/
 
 help message: `Usage: ./sys-php-chroot /path/to/chrootdir`
 
-## sys-ipton
+sys-ipton
+==========
 
 `type: perl`
 
@@ -311,7 +350,8 @@ both ipv4 address and number is not allowed
 
 help message: `Usage: ./sys-ipton --help`
 
-## sys-mysql-block-account
+sys-mysql-block-account
+=======================
 
 `type: perl`
 
@@ -383,7 +423,8 @@ spider user password is normal:
 
 help message: `Usage: ./sys-mysql-block-account --help`
 
-## sys-lock-run
+sys-lock-run
+============
 
 `type: shell`
 
@@ -401,7 +442,8 @@ $ ./sys-lock-run sleep 20
 note: as use flock, this tool will create lock file in /tmp dirs and 
 delete lock file when exit.
 
-## sys-repeat
+sys-repeat
+==========
 
 `type: shell`
 
@@ -421,7 +463,8 @@ $ ./sys-repeat ls -hl sys-checkport
 
 help message: ./sys-repeat command ...
 
-## sys-tcp-port-proxy
+sys-tcp-port-proxy
+==================
 
 `type: c`
 
@@ -460,7 +503,8 @@ $ mysql -h 127.0.0.1 -P 13306 -uroot -p
 tcp proxy > 2016-03-30 15:07:02: request from 127.0.0.1
 ```
 
-## sys-mysql-createdb
+sys-mysql-createdb
+==================
 
 `type: perl`
 
@@ -536,7 +580,8 @@ Already exist database: test3
 
 help message: perl sys-mysql-createdb --help
 
-## sys-echo-stderr
+sys-echo-stderr
+===============
 
 `type: shell`
 
@@ -548,7 +593,8 @@ $ ./sys-echo-stderr hello world >1.txt
 hello world
 ```
 
-## sys-mysql-qps
+sys-mysql-qps
+=============
 
 `type: perl`
 

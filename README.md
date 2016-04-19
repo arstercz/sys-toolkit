@@ -527,15 +527,19 @@ create database and user:
 	db  : test3
 	user: user_test1
 	pass: VyhQWQCeaKxZJrroeNVP
+The user user_test1@10.0.21.% connect ok
  
 $ perl sys-mysql-createdb --host 127.0.0.1 --user root --database test1  --askpass --createdb=test3 --account-user=user_test1 --account-host='10.0.21.%' --priv="select, insert" --verbose
 Enter password : 
 Already exist database: test3
 ```
 
+help message: perl sys-mysql-createdb --help
+
 ## sys-echo-stderr
 
 `type: shell`
+
 echo message to STDERR.
 
 #### Usage:
@@ -543,6 +547,39 @@ echo message to STDERR.
 $ ./sys-echo-stderr hello world >1.txt 
 hello world
 ```
+
+## sys-mysql-qps
+
+`type: perl`
+
+Get MySQL status, qps and conn
+
+#### Dependency
+```
+DBI
+DBD::mysql
+perl-TermReadKey (if enable askpass option)
+```
+
+## Usage
+
+```
+$ ./perl sys-mysql-qps -h 127.0.0.1 -u root -P 3306 --askpass -i 1
+Enter password :
+                         |          -- QPS --           |     -- Innodb Rows Status --     | -- Threads --  |          -- Bytes --
+     addr    time        |   ins  upd  del   sel    qps |      ins     upd     del    read |  run conn  cre |      recv           send
+127.0.0.1:3306 16:47:28  |     0  110    0   891   1120 |        0       0       2       0 |    1    0    0 |     132044 bytes   2078183 bytes
+127.0.0.1:3306 16:47:29  |     0  131    0   956   1244 |        0       0       0       0 |    4    1    0 |     144377 bytes   2226475 bytes
+127.0.0.1:3306 16:47:30  |     0  142    0   996   1273 |        0       0       0       0 |    0    0    0 |     143185 bytes   2302739 bytes
+127.0.0.1:3306 16:47:31  |     0  135    0   907   1179 |        0       0       1       0 |    0    0    0 |     134619 bytes   2241287 bytes
+127.0.0.1:3306 16:47:32  |     0  133    0   952   1223 |        0       0       0       0 |    0  642    0 |     141494 bytes   2133514 bytes
+127.0.0.1:3306 16:47:33  |     0  140    0   935   1208 |        0       0       0       0 |    0    2    0 |     131543 bytes   1962872 bytes
+127.0.0.1:3306 16:47:34  |     0  133    0  1043   1318 |        0       0       1       0 |    0    1    0 |     153238 bytes   2253878 bytes
+127.0.0.1:3306 16:47:35  |     0  147    0   967   1238 |        0       0       0       0 |    0    0    0 |     129724 bytes   2026643 bytes
+127.0.0.1:3306 16:47:36  |     0  117    0   833   1056 |        0       0       1       0 |    1    0    0 |     121172 bytes   1974676 bytes
+```
+
+help message: perl sys-mysql-qps --help
 
 ## License
 

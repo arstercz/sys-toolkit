@@ -30,7 +30,7 @@ my $database = 'information_schema';
 my $charset  = 'utf8';
 my $help     = 0;
 my $verbose  = 0;
-my $interval = 5;
+my $interval = 1;
 
 GetOptions(
     "host|h=s"     => \$host,
@@ -179,7 +179,7 @@ printf("%s%-12s|%6s%5s%5s%6s%7s | %8s%8s%8s%8s | %4s%5s%5s | %-15s%-15s\n",
        'ins', 'upd', 'del', 'read', 'run', 'conn', 'cre', " " x 5 . 'recv', " " x 5 . 'send');
 
 
-my $n = 10;
+my $n = 100;
 while ($n--) {
    my $item_info = $dbh->selectall_arrayref($sql_status_info);
    foreach my $status (@$item_info) {
@@ -240,7 +240,7 @@ while ($n--) {
            print "error: $@";
        }
    }
-   print_state( get_time(), \%db_state ) if $n < 9;
+   print_state( get_time(), \%db_state ) if $n < 99;
    sleep $interval;
 }
 # ###################################################################

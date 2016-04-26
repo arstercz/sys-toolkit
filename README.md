@@ -26,6 +26,7 @@ Table of Contents
 * [sys-mysql-createdb](#sys-mysql-createdb)
 * [sys-mysql-qps](#sys-mysql-qps)
 * [sys-mysql-set-maxconnections](#sys-mysql-set-maxconnections)
+* [License](#License)
 
 sys-genpass
 ===========
@@ -687,6 +688,7 @@ Enter password:
 
 help message: ./sys-mysql-set-maxconnections connections_number
 
-## License
+License
+=======
 
 MIT / BSD

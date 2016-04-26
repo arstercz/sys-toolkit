@@ -636,6 +636,10 @@ sys-mysql-set-maxconnections
 
 Set local MySQL's max_connections to avoid error "Too many connections.."
 
+#### Risk
+
+Maybe crash when MySQL Server is very busy.
+
 #### Need
 ```
 gdb

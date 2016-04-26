@@ -1,0 +1,42 @@
+#!/bin/bash
+# set max connections for local MySQL to avoid error "Too many connections.."
+# https://www.percona.com/blog/2010/03/23/too-many-connections-no-problem/    
+# zhe.chen<chenzhe07@gmail.com>
+
+exec 2>&1
+
+if [ $# -ne 1 ]; then
+   echo "Usage: sys-mysql-set-maxconnections number"
+   exit 1;
+fi
+
+pidofcmd=$(which pidof 2>/dev/null)
+if [ ! -x "$pidofcmd" ]; then
+   echo "can not find pidof command or has no permission."
+   exit 1
+fi
+
+gdbcmd=$(which gdb 2>/dev/null)
+if [ ! -x "$gdbcmd" ]; then
+   echo "can not find gdb command or has no permission."
+   exit 1
+fi
+
+connection=$1
+if [ "$connection" -lt 0 ]; then
+    echo "connection must be greater than 0 integer."
+    exit 1
+fi
+
+mysqlpids=$(pidof mysqld)
+if [ -z "$mysqlpids" ]; then
+   echo "no MySQL process";
+   exit 0;
+fi
+
+for mysql_pid in $mysqlpids; do
+   if [ -n $mysql_pid ]; then
+          $gdbcmd -p $mysql_pid -ex "set max_connections=$connection" -batch
+          echo "set pid $mysql_pid max_connections = $connection"
+   fi
+done

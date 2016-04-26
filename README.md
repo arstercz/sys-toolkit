@@ -25,6 +25,7 @@ Table of Contents
 * [sys-mysql-block-account](#sys-mysql-block-account)
 * [sys-mysql-createdb](#sys-mysql-createdb)
 * [sys-mysql-qps](#sys-mysql-qps)
+* [sys-mysql-set-maxconnections](#sys-mysql-set-maxconnections)
 
 sys-genpass
 ===========
@@ -626,6 +627,65 @@ Enter password :
 ```
 
 help message: perl sys-mysql-qps --help
+
+sys-mysql-set-maxconnections
+============================
+
+`type shell`
+
+Set local MySQL's max_connections to avoid error "Too many connections.."
+
+#### Need
+```
+gdb
+```
+
+## Usage
+```
+$ mysql -p -e 'select @@max_connections'
+Enter password:
++-------------------+
+| @@max_connections |
++-------------------+
+|               100 |
++-------------------+
+
+$ ./sys-mysql-set-maxconnections 3000
+[New LWP 9029]
+[New LWP 30058]
+[New LWP 28201]
+[New LWP 27571]
+[New LWP 27476]
+[New LWP 27474]
+[New LWP 27473]
+[New LWP 27472]
+[New LWP 27471]
+[New LWP 27470]
+[New LWP 27469]
+[New LWP 27466]
+[New LWP 27465]
+[New LWP 27464]
+[New LWP 27463]
+[New LWP 27462]
+[New LWP 27461]
+[New LWP 27460]
+[New LWP 27459]
+[New LWP 27458]
+[New LWP 27457]
+[Thread debugging using libthread_db enabled]
+0x00007fa0b2371113 in poll () from /lib64/libc.so.6
+set pid 27454 max_connections = 3000
+
+$ mysql -p -e 'select @@max_connections'
+Enter password:
++-------------------+
+| @@max_connections |
++-------------------+
+|              3000 |
++-------------------+
+```
+
+help message: ./sys-mysql-set-maxconnections connections_number
 
 ## License
 

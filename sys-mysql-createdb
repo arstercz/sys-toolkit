@@ -380,9 +380,9 @@ MySQL database will be used, default is 'information_schema'.
 
 The character used when connect to MySQL, default value is UTF8.
 
-=item threthold=i | t
+=item createdb
 
-kill the sql which blocking times greater than specified times.
+New schema to create, can not be null.
 
 =item verbose|v
 

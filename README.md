@@ -17,6 +17,7 @@ Table of Contents
 * [sys-php-chroot](#sys-php-chroot)
 * [sys-tcp-port-proxy](#sys-tcp-port-proxy)
 * [sys-shell-type](#sys-shell-type)
+* [sys-memory-maps](#sys-memory-maps)
 * [sys-mem-redis-summary](#sys-mem-redis-summary)
 * [sys-mysql-summary](#sys-mysql-summary)
 * [sys-mysql-adj](#sys-mysql-adj)
@@ -691,6 +692,23 @@ Enter password:
 ```
 
 help message: ./sys-mysql-set-maxconnections connections_number
+
+sys-memory-maps
+===============
+
+`type: shell`
+
+See the memory mapping of a process
+
+## Usage
+```
+$ ./sys-memory-maps 25005
+share   =   100164 Kbytes
+private =    39332 Kbytes
+total   =   139496 Kbytes (   71.80 % shareable)
+```
+
+help message: sys-memory-maps pid
 
 License
 =======

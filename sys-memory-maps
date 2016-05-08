@@ -1,0 +1,52 @@
+#!/bin/bash
+# See the memory mapping of a process
+# use man proc for more info
+# zhe.chen<chenzhe07@gmail.com>
+
+exec 2>&1
+
+if [ $# -ne 1 ]; then
+   echo "Usage: sys-memory-maps pid"
+   exit 1;
+fi
+
+PID=$1
+MAPS="/proc/$PID/maps"
+if [ ! -e $MAPS ]; then
+   echo "The $PID maps does not exists."
+   exit 1
+fi
+
+cat $MAPS | perl -ne '
+    BEGIN { 
+        %mem_hash = 
+                   ( 
+                     'share' => 0, 
+                     'total' => 0, 
+                   )
+    }
+    ($mem, $prot, $offset, $dev, $inode, $type) = split();
+    ($start, $stop) = split("-", $mem);
+   
+    $size = hex($stop) - hex($start);
+    $mem_hash{'total'} += $size;
+   
+    printf "%-60s %s %8.0f Kbytes\n", $type, $prot, $size/1024;
+
+    if ($prot =~ /^r-/ and $inode != 0) {
+        $mem_hash{'share'} += $size;
+    }
+	
+    END {
+        printf "\n";
+        printf "share   = %8.0f Kbytes\n", $mem_hash{'share'}/1024;
+        printf "private = %8.0f Kbytes\n", ($mem_hash{'total'} - $mem_hash{'share'})/1024;
+        if( $mem_hash{'total'} == 0) {
+            printf "total   = %8.0f Kbytes\n", 0;
+        }
+        else {
+            printf "total   = %8.0f Kbytes (%8.2f %% shareable)\n", $mem_hash{'total'}/1024, ($mem_hash{'share'}/$mem_hash{total})*100;
+        }
+    }
+'
+

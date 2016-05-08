@@ -31,14 +31,13 @@ cat $MAPS | perl -ne '
     $size = hex($stop) - hex($start);
     $mem_hash{'total'} += $size;
    
-    printf "%-60s %s %8.0f Kbytes\n", $type, $prot, $size/1024;
+    #printf "%-60s %s %8.0f Kbytes\n", $type, $prot, $size/1024;
 
     if ($prot =~ /^r-/ and $inode != 0) {
         $mem_hash{'share'} += $size;
     }
 	
     END {
-        printf "\n";
         printf "share   = %8.0f Kbytes\n", $mem_hash{'share'}/1024;
         printf "private = %8.0f Kbytes\n", ($mem_hash{'total'} - $mem_hash{'share'})/1024;
         if( $mem_hash{'total'} == 0) {

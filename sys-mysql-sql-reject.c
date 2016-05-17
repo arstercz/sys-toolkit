@@ -13,6 +13,9 @@ Tested to run on the Centos 6.5.
 The TCP reset packets (TCP RST) are sent when the utility sees ACK packets. 
 
 zhe.chen<chenzhe07@gmail.com>
+
+more pcap programming from:
+http://www.tcpdump.org/pcap.html 
 */
 
 #define APP_NAME        "snapper"

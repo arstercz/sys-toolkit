@@ -27,6 +27,7 @@ Table of Contents
 * [sys-mysql-createdb](#sys-mysql-createdb)
 * [sys-mysql-qps](#sys-mysql-qps)
 * [sys-mysql-set-maxconnections](#sys-mysql-set-maxconnections)
+* [sys-mysql-sql-reject](#sys-mysql-sql-reject)
 * [License](#License)
 
 sys-genpass
@@ -709,6 +710,81 @@ total   =   139496 Kbytes (   71.80 % shareable)
 ```
 
 help message: sys-memory-maps pid
+
+
+sys-mysql-sql-reject
+====================
+
+`type: c`
+
+A simple tool to sniffer MySQL query and send RST to source ip and port
+if you want to disable the sql execute.
+
+This tool is similar to iptables which has the string option to match the 
+data in tcp packages.
+
+sys-mysql-sql-reject is fork from snapper:
+https://github.com/vr000m/Snapper
+
+#### Need
+```
+libpcap
+```
+
+#### How to Build
+# gcc -g -Wall -o sys-mysql-sql-reject -lpcap sys-mysql-sql-reject.c
+
+#### Usage
+
+in session A:
+
+```
+ ./sys-mysql-sql-reject em1 "tcp dst port 3306" "select user,host from mysql.user"
+snapper - based on Sniffer example using libpcap
+extended by Varun Singh / Copyright (c) 2005 The Tcpdump Group
+THERE IS ABSOLUTELY NO WARRANTY FOR THIS PROGRAM.
+
+
+NET: 10.3.254.0 a03fe00 CMASK: 255.255.255.0 ffffff00
+Device: em1
+Filter expression: tcp dst port 3306
+MySQL query filter: select user,host from mysql.user
+
+P107:	10.3.254.121	->	 10.3.254.119	TCP	64722	->	 3306	query: desc tm 
+P108:	10.3.254.121	->	 10.3.254.119	TCP	64722	->	 3306	
+P109:	10.3.254.121	->	 10.3.254.119	TCP	64722	->	 3306	query: delete from tm where a = 'hah' 
+P110:	10.3.254.121	->	 10.3.254.119	TCP	64722	->	 3306	
+P111:	10.3.254.121	->	 10.3.254.119	TCP	64722	->	 3306	query: select user,host from mysql.user 
+P112:	10.3.254.121	->	 10.3.254.119	TCP	64722	->	 3306
+
+```
+
+in session B:
+```
+mysql> desc tm;
++-------+------------------+------+-----+---------+----------------+
+| Field | Type             | Null | Key | Default | Extra          |
++-------+------------------+------+-----+---------+----------------+
+| a     | int(10) unsigned | NO   | PRI | NULL    | auto_increment |
++-------+------------------+------+-----+---------+----------------+
+1 row in set (0.03 sec)
+
+mysql> delete from tm where a = 'hah';
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> select user,host from mysql.user;
+ERROR 2013 (HY000): Lost connection to MySQL server during query
+```
+
+help message:
+```
+Usage: sys-mysql-sql-reject [interface] [tcp_filter] [sql_filter]
+
+Options:
+    interface     Listen on <interface> for packets.
+    tcp_filter        PCAP Filter to apply on packets.
+    sql_filter        MySQL query to match on packets
+```
 
 License
 =======

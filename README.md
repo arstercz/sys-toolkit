@@ -732,7 +732,9 @@ libpcap
 ```
 
 #### How to Build
+```
 # gcc -g -Wall -o sys-mysql-sql-reject -lpcap sys-mysql-sql-reject.c
+```
 
 #### Usage
 

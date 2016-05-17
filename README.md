@@ -738,7 +738,8 @@ libpcap
 
 #### Usage
 
-in session A:
+in session A, MySQL Server will send RST mark to client when you execute 
+the sql "select user,host from mysql.user"
 
 ```
  ./sys-mysql-sql-reject em1 "tcp dst port 3306" "select user,host from mysql.user"

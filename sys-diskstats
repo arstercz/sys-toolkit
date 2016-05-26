@@ -1,0 +1,177 @@
+#!/usr/bin/env perl
+=head1 NAME
+
+sys-diskstats - see the device disk status
+
+=cut
+
+=head1 SYNOPSIS
+
+    use sys-diskstats --help for more info.
+
+    options:
+       d : device, eg: sda1, sdb ..
+       i : interval calculate the result.
+       h :print help info.
+
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long qw(:config no_ignore_case);
+use English '-no_match_vars';
+use POSIX qw(strftime);
+use Data::Dumper;
+
+my $device;
+my $interval = 1;
+my $help;
+
+GetOptions(
+    "d=s" => \$device,
+    "i=i" => \$interval,
+    "h!"  => \$help,
+);
+
+if ($help) {
+    usage($0);
+}
+
+sub usage {
+    my $name = shift;
+    system("perldoc $name");
+    exit 0;
+}
+
+unless ( defined $device ) {
+    print "Disk device must be specified\n";
+    exit 1;
+}
+
+# store last state data
+my  %disk_state = (
+    'iops'    => 0,
+    'rs'      => 0,
+    'rs_mer'  => 0,
+    'ws'      => 0,
+    'ws_mer'  => 0,
+    'rs_sec'  => 0,
+    'ws_sec'  => 0,
+    'e_iot'   => 0,
+    'e_iot_w' => 0,
+    'r_t'     => 0,
+    'w_t'     => 0,
+);
+
+# calc current value
+my %disk_value = (
+    'iops'    => 0,
+    'rs'      => 0,
+    'rs_mer'  => 0,
+    'ws'      => 0,
+    'ws_mer'  => 0,
+    'rs_sec'  => 0,
+    'ws_sec'  => 0,
+    'e_iot'   => 0,
+    'e_iot_w' => 0,
+    'r_t'     => 0,
+    'w_t'     => 0,
+);
+
+sub get_time {
+    return strftime("%H:%M:%S", localtime(time));
+}
+
+sub round_value {
+    my $value = shift @_;
+    return sprintf("%0.2f", $value);
+}
+
+sub print_state {
+    my ($time, $disk_info) = @_;
+    printf("%12s %10.2f%10.2f%10.2f%10.2f%13.2f%10.2f%13.2f%11.2f ms%11.2f ms%11.2f ms%11.2f ms\n", $time,
+    $disk_info->{iops}, $disk_info->{rs}, $disk_info->{rs_mer}, $disk_info->{ws},
+    $disk_info->{ws_mer}, $disk_info->{rs_sec}, $disk_info->{ws_sec}, 
+    $disk_info->{e_iot}, $disk_info->{e_iot_w}, $disk_info->{r_t}, $disk_info->{w_t});
+}
+
+# print header info
+printf("%-12s %10s%10s%10s%10s%10s%10s%10s%15s%13s%13s%13s\n",
+    " " x 12, " " x 6 . 'iops', " " x 8 . 'rs', " " x 4 . 'rs_mer', " " x 8 . 'ws', 
+    " " x 7 . 'ws_mer', " " x 4 . 'rs_sec', " " x 7 . 'ws_sec', " " x 3 . 'e_iot', 
+    " " x 3 . 'e_iot_w', " " x 4 . 'r_t', " " x 4 . 'w_t');
+
+# read /proc/diskstats
+my $n = 100;
+while( $n-- ) {
+    open my $fh, '<', '/proc/diskstats' or die "open /proc/diskstats error: $!";
+    while(<$fh>) {
+      chomp $_;
+      my @words = ($_ =~ /(\S+)/g);
+      my %disk_per;
+      if ( @words + 0 > 2 && $words[2] eq $device ) {
+          if ( @words + 0 > 10 ) {
+             $disk_value{'rs'}       = $words[3] - $disk_state{'rs'};      # disk reads
+             $disk_state{'rs'}       = $words[3];
+             $disk_value{'rs_mer'}   = $words[4] - $disk_state{'rs_mer'};  # disk read merged
+             $disk_state{'rs_mer'}   = $words[4];
+             $disk_value{'rs_sec'}   = $words[5] - $disk_state{'rs_sec'};  # disk sectors read
+             $disk_state{'rs_sec'}   = $words[5];
+             $disk_value{'r_t'}      = $words[6] - $disk_state{'r_t'};     # disk read time in ms
+             $disk_state{'r_t'}      = $words[6];
+             $disk_value{'ws'}       = $words[7] - $disk_state{'ws'};      # disk writes
+             $disk_state{'ws'}       = $words[7];
+             $disk_value{'ws_mer'}   = $words[8] - $disk_state{'ws_mer'};  # disk write merged
+             $disk_state{'ws_mer'}   = $words[8];
+             $disk_value{'ws_sec'}   = $words[9] - $disk_state{'ws_sec'};  # disk sectors write
+             $disk_state{'ws_sec'}   = $words[9];
+             $disk_value{'w_t'}      = $words[10] - $disk_state{'w_t'};    # disk write time in ms
+             $disk_state{'w_t'}      = $words[10];
+             $disk_value{'iops'}     = $words[3] + $words[7] - $disk_state{'iops'};
+             $disk_state{'iops'}     = $words[3] + $words[7];
+             $disk_value{'e_iot'}    = $words[12] - $disk_state{'e_iot'};   # disk io time
+             $disk_state{'e_iot'}    = $words[12];
+             $disk_value{'e_iot_w'}  = $words[13] - $disk_state{'e_iot_w'}; # disk io time weighted
+             $disk_state{'e_iot_w'}  = $words[13];
+          }
+          else { # Early 2.6 kernels had only 4 fields for partitions.
+             $disk_value{'rs'}       = $words[3] - $disk_state{'rs'};
+             $disk_state{'rs'}       = $words[3];
+             $disk_value{'rs_mer'}   = 0;
+             $disk_value{'rs_sec'}   = $words[4] - $disk_state{'rs_sec'};
+             $disk_state{'rs_sec'}   = $words[4];
+             $disk_value{'r_t'}      = 0;
+             $disk_value{'ws'}       = $words[5] - $disk_state{'ws'};
+             $disk_state{'ws'}       = $words[5];
+             $disk_value{'ws_mer'}   = 0;
+             $disk_value{'ws_sec'}   = $words[6] - $disk_state{'ws_sec'};
+             $disk_state{'ws_sec'}   = $words[6];
+             $disk_value{'w_t'}      = 0;
+             $disk_value{'iops'}     = $words[3] + $words[5] - $disk_state{'iops'};
+             $disk_state{'iops'}     = $words[3] + $words[5];
+             $disk_value{'e_iot'}    = 0;
+             $disk_value{'e_iot_w'}  = 0;
+          }
+
+          $disk_per{'rs'}      = round_value( $disk_value{'rs'} / $interval );
+          $disk_per{'rs_mer'}  = round_value( $disk_value{'rs_mer'} / $interval );
+          $disk_per{'rs_sec'}  = round_value( $disk_value{'rs_sec'} / $interval );
+          $disk_per{'r_t'}     = round_value( $disk_value{'r_t'} / $interval );
+          $disk_per{'ws'}      = round_value( $disk_value{'ws'} / $interval );
+          $disk_per{'ws_mer'}  = round_value( $disk_value{'ws_mer'} / $interval );
+          $disk_per{'ws_sec'}  = round_value( $disk_value{'ws_sec'} / $interval );
+          $disk_per{'w_t'}     = round_value( $disk_value{'w_t'} / $interval );
+          $disk_per{'iops'}    = round_value( $disk_value{'iops'} / $interval );
+          $disk_per{'e_iot'}   = round_value( $disk_value{'e_iot'} / $interval );
+          $disk_per{'e_iot_w'} = round_value( $disk_value{'e_iot_w'} / $interval );
+          
+          print_state( get_time(), \%disk_per ) if $n < 99;
+      }
+      else {
+          #printf("Looks like we did not find %s in the output\n", $device);
+          #exit 1;
+      }
+    }
+    sleep $interval;
+    close $fh or warn "close error: $!";
+}

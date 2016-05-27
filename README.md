@@ -45,6 +45,8 @@ IEZQS_hW7=exO}JG@L
 ```
 help message: ./sys-genpass --help 
 
+[Back to TOC](#table-of-contents)
+
 sys-nton
 ========
 
@@ -77,6 +79,8 @@ $ ./sys-nton -n 0x0F
 ```
 help message: ./sys-nton --help
 
+[Back to TOC](#table-of-contents)
+
 sys-pubip
 =========
 
@@ -89,6 +93,8 @@ Get public ip address:
 110.89.157.218
 ```
 Can be used without args, return error if execute 5 seconds.
+
+[Back to TOC](#table-of-contents)
 
 sys-ascii
 =========
@@ -121,6 +127,8 @@ $ ./sys-ascii
 ```
 
 Can be used without args.
+
+[Back to TOC](#table-of-contents)
 
 sys-mysql-summary
 ================
@@ -155,6 +163,8 @@ Enter password :
 
 help message: $ ./sys-mysql-summary --help
 
+[Back to TOC](#table-of-contents)
+
 sys-checkport
 =============
 
@@ -178,6 +188,8 @@ port 2000: open | filtered -- udp port has no response
 
 help message: $ ./sys-checkport --help
 
+[Back to TOC](#table-of-contents)
+
 sys-mysql-adj
 =============
 
@@ -195,6 +207,8 @@ $ ./sys-mysql-adj
 no MySQL process
 ```
 Can be used without args.
+
+[Back to TOC](#table-of-contents)
 
 sys-mem-redis-summary
 =====================
@@ -240,6 +254,8 @@ END
 ```
 help message: $ ./sys-mem-redis-summary --help
 
+[Back to TOC](#table-of-contents)
+
 sys-mysql-kill-blocked-thread
 =============================
 
@@ -270,6 +286,8 @@ kill 100251 ok.
 
 help message: $ ./sys-mysql-killblockthread --help
 
+[Back to TOC](#table-of-contents)
+
 sys-shell-type
 ==============
 
@@ -281,6 +299,8 @@ $ ./sys-shell-type
 bash
 ```
 Can be used without args
+
+[Back to TOC](#table-of-contents)
 
 sys-mysql-kill-long-query
 =========================
@@ -311,6 +331,8 @@ kill 92 ok
 ```
 help message: $ ./sys-mysql-killlongquery --help
 
+[Back to TOC](#table-of-contents)
+
 sys-php-chroot
 =============
 
@@ -331,6 +353,8 @@ http://jameskirsop.com/calling-ssl-secured-sites-via-curl-in-an-apache-chroot/
 ```
 
 help message: `Usage: ./sys-php-chroot /path/to/chrootdir`
+
+[Back to TOC](#table-of-contents)
 
 sys-ipton
 ==========
@@ -354,6 +378,8 @@ both ipv4 address and number is not allowed
 ```
 
 help message: `Usage: ./sys-ipton --help`
+
+[Back to TOC](#table-of-contents)
 
 sys-mysql-block-account
 =======================
@@ -428,6 +454,8 @@ spider user password is normal:
 
 help message: `Usage: ./sys-mysql-block-account --help`
 
+[Back to TOC](#table-of-contents)
+
 sys-lock-run
 ============
 
@@ -446,6 +474,8 @@ $ ./sys-lock-run sleep 20
 
 note: as use flock, this tool will create lock file in /tmp dirs and 
 delete lock file when exit.
+
+[Back to TOC](#table-of-contents)
 
 sys-repeat
 ==========
@@ -467,6 +497,8 @@ $ ./sys-repeat ls -hl sys-checkport
 ```
 
 help message: ./sys-repeat command ...
+
+[Back to TOC](#table-of-contents)
 
 sys-tcp-port-proxy
 ==================
@@ -507,6 +539,8 @@ $ mysql -h 127.0.0.1 -P 13306 -uroot -p
 3. session A output the connection:
 tcp proxy > 2016-03-30 15:07:02: request from 127.0.0.1
 ```
+
+[Back to TOC](#table-of-contents)
 
 sys-mysql-createdb
 ==================
@@ -585,6 +619,8 @@ Already exist database: test3
 
 help message: perl sys-mysql-createdb --help
 
+[Back to TOC](#table-of-contents)
+
 sys-echo-stderr
 ===============
 
@@ -597,6 +633,8 @@ echo message to STDERR.
 $ ./sys-echo-stderr hello world >1.txt 
 hello world
 ```
+
+[Back to TOC](#table-of-contents)
 
 sys-mysql-qps
 =============
@@ -631,6 +669,8 @@ Enter password :
 ```
 
 help message: perl sys-mysql-qps --help
+
+[Back to TOC](#table-of-contents)
 
 sys-mysql-set-maxconnections
 ============================
@@ -695,6 +735,8 @@ Enter password:
 
 help message: ./sys-mysql-set-maxconnections connections_number
 
+[Back to TOC](#table-of-contents)
+
 sys-memory-maps
 ===============
 
@@ -711,6 +753,8 @@ total   =   139496 Kbytes (   71.80 % shareable)
 ```
 
 help message: sys-memory-maps pid
+
+[Back to TOC](#table-of-contents)
 
 
 sys-mysql-sql-reject
@@ -790,6 +834,8 @@ Options:
     sql_filter        MySQL query to match on packets
 ```
 
+[Back to TOC](#table-of-contents)
+
 sys-diskstats
 =============
 
@@ -802,7 +848,7 @@ read more from kernel Documentation/iostats.txt
 #### Usage 
 
 ```
-# ./sys-diskstats -d sda3 -i 5
+$ ./sys-diskstats -d sda3 -i 5
                    iops        rs    rs_mer        ws       ws_mer    rs_sec       ws_sec          e_iot      e_iot_w          r_t          w_t
     19:32:36      98.00      0.00      0.00     98.00         0.40      0.00       574.20       6.60 ms       6.60 ms       0.00 ms       6.60 ms
     19:32:41     331.40      0.00      0.00    331.40         0.00      0.00      9550.20      19.20 ms      33.00 ms       0.00 ms      33.00 ms
@@ -812,7 +858,7 @@ read more from kernel Documentation/iostats.txt
     19:33:01     296.40      0.00      0.00    296.40         0.00      0.00      9362.20      15.80 ms      22.60 ms       0.00 ms      22.60 ms
 ```
 
-help message: ./sys=diskstats -h
+help message: ./sys-diskstats -h
 
 item list:
 

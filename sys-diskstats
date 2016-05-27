@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 =head1 NAME
 
-sys-diskstats - see the device disk status
+sys-diskstats - see the local device disk status
 
 =cut
 
@@ -105,6 +105,7 @@ printf("%-12s %10s%10s%10s%10s%10s%10s%10s%15s%13s%13s%13s\n",
 my $n = 100;
 while( $n-- ) {
     open my $fh, '<', '/proc/diskstats' or die "open /proc/diskstats error: $!";
+    my $find = 0;
     while(<$fh>) {
       chomp $_;
       my @words = ($_ =~ /(\S+)/g);
@@ -167,13 +168,14 @@ while( $n-- ) {
           
           print_state( get_time(), \%disk_per ) if $n < 99;
       }
-      else {
-          #printf("Looks like we did not find %s in the output\n", $device);
-          #exit 1;
-      }
+      $find = 1;
     }
     sleep $interval;
     close $fh or warn "close error: $!";
+    unless( $find ) {
+         printf("Looks like we did not find %s in the output\n", $device);
+         exit 1;
+    }
 }
 
 # ###################################################################

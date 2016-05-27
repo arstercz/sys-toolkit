@@ -17,6 +17,7 @@ Table of Contents
 * [sys-php-chroot](#sys-php-chroot)
 * [sys-tcp-port-proxy](#sys-tcp-port-proxy)
 * [sys-shell-type](#sys-shell-type)
+* [sys-diskstats](#sys-diskstats)
 * [sys-memory-maps](#sys-memory-maps)
 * [sys-mem-redis-summary](#sys-mem-redis-summary)
 * [sys-mysql-summary](#sys-mysql-summary)
@@ -788,6 +789,48 @@ Options:
     tcp_filter        PCAP Filter to apply on packets.
     sql_filter        MySQL query to match on packets
 ```
+
+sys-diskstats
+=============
+
+`type: perl`
+
+see the local device disk status
+
+read more from kernel Documentation/iostats.txt
+
+#### Usage 
+
+```
+# ./sys-diskstats -d sda3 -i 5
+                   iops        rs    rs_mer        ws       ws_mer    rs_sec       ws_sec          e_iot      e_iot_w          r_t          w_t
+    19:32:36      98.00      0.00      0.00     98.00         0.40      0.00       574.20       6.60 ms       6.60 ms       0.00 ms       6.60 ms
+    19:32:41     331.40      0.00      0.00    331.40         0.00      0.00      9550.20      19.20 ms      33.00 ms       0.00 ms      33.00 ms
+    19:32:46      90.60      0.00      0.00     90.60         0.80      0.00       570.20       3.00 ms       3.00 ms       0.00 ms       3.20 ms
+    19:32:51     125.80      0.00      0.00    125.80         0.00      0.00      3263.80       5.20 ms      14.20 ms       0.00 ms      14.20 ms
+    19:32:56      93.20      0.00      0.00     93.20         0.00      0.00       533.00       3.80 ms       3.80 ms       0.00 ms       3.80 ms
+    19:33:01     296.40      0.00      0.00    296.40         0.00      0.00      9362.20      15.80 ms      22.60 ms       0.00 ms      22.60 ms
+```
+
+help message: ./sys=diskstats -h
+
+item list:
+
+```
+   iops     => io operations per second
+   rs       => disk reads per second
+   rs_mer   => disk read merged per second
+   ws       => disk write per second
+   ws_mer   => disk write merged per second
+   rs_sec   => disk sectors read per second
+   ws_sec   => disk sectors write per second
+   e_iot    => disk io time in ms
+   e_iot_w  => disk io time weighted
+   r_t      => disk read time in ms
+   w_t      => disk write time in ms
+```
+
+[Back to TOC](#table-of-contents)
 
 License
 =======

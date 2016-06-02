@@ -167,8 +167,8 @@ while( $n-- ) {
           $disk_per{'e_iot_w'} = round_value( $disk_value{'e_iot_w'} / $interval );
           
           print_state( get_time(), \%disk_per ) if $n < 99;
+          $find = 1;
       }
-      $find = 1;
     }
     sleep $interval;
     close $fh or warn "close error: $!";

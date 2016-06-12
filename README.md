@@ -18,6 +18,7 @@ Table of Contents
 * [sys-tcp-port-proxy](#sys-tcp-port-proxy)
 * [sys-shell-type](#sys-shell-type)
 * [sys-diskstats](#sys-diskstats)
+* [sys-http-code](#sys-http-code)
 * [sys-memory-maps](#sys-memory-maps)
 * [sys-mem-redis-summary](#sys-mem-redis-summary)
 * [sys-mysql-summary](#sys-mysql-summary)
@@ -875,6 +876,57 @@ item list:
    r_t      => disk read time in ms
    w_t      => disk write time in ms
 ```
+
+[Back to TOC](#table-of-contents)
+
+sys-http-code
+=============
+
+`type: perl`
+
+Explains the meaning of an HTTP status code.
+
+#### Usage
+
+```
+$ ./sys-http-code -c 100
+  Status code: 100
+  Message: Continue
+  Code explanation: Request received, please continue
+
+$ ./sys-http-code -c 10x
+  Status code: 100
+  Message: Continue
+  Code explanation: Request received, please continue
+
+  Status code: 101
+  Message: Switching Protocols
+  Code explanation: Switching to new protocol; obey Upgrade header
+
+  Status code: 102
+  Message: Processing
+  Code explanation: WebDAV; RFC 2518, Server has received and is processing the request.
+
+  Status code: 103
+  Message: Processing
+  Code explanation: Server has received and is processing the request.
+
+$ ./sys-http-code -c all
+  Status code: 100
+  Message: Continue
+  Code explanation: Request received, please continue
+
+  Status code: 101
+  Message: Switching Protocols
+  Code explanation: Switching to new protocol; obey Upgrade header
+  ...
+  ...
+  Status code: 599
+  Message: Network connect timeout error
+  Code explanation: Network connect timeout behind the proxy.
+```
+
+help message: ./sys-http-code -h
 
 [Back to TOC](#table-of-contents)
 

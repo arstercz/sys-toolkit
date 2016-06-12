@@ -1,0 +1,180 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-http-code - Explains the meaning of an HTTP status code.
+
+=cut
+
+=head1 SYNOPSIS
+
+    use sys-http-code --help for more info.
+
+    options:
+       code|c: http status code, eg: 200, 404, 30x(x means any digit)
+       help|h: print help info.
+
+    read more:
+        https://github.com/waldemarnt/http-status-codes
+        https://github.com/rspivak/httpcode
+
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long;
+
+my $code;
+my $help;
+
+GetOptions(
+  "code|c=s"  => \$code,
+  "help|h!"   => \$help,
+);
+
+if($help) {
+  usage($0);
+}
+
+sub usage {
+  my $name = shift;
+  system("perldoc $name");
+  exit 0;
+}
+
+sub is_valid {
+   my $code = shift;
+   return 0 if length($code) + 0 > 3;
+   return 1 if $code =~ /all/i;
+   my @spells = split(//,$code);
+   for my $spell (@spells) {
+       unless ( ($spell =~ /\d/ or $spell =~ /x/) ) {
+           return 0;
+       }
+   }
+   return 1;
+}
+
+sub code_display {
+   my $code = shift;
+   $code =~ s/x/\./g if $code =~ /x/i;
+   $code =~ s//.*/g if $code =~ /all/i;
+   
+   # http status code
+   my %status_code = (
+      100 => ['Continue', 'Request received, please continue'],
+      101 => ['Switching Protocols', 'Switching to new protocol; obey Upgrade header'],
+      102 => ['Processing', 'WebDAV; RFC 2518, Server has received and is processing the request.'],
+      103 => ['Processing', 'Server has received and is processing the request.'],
+      122 => ['Request-uri too long', 'URI is longer than a maximum of 2083 characters'],
+      200 => ['OK', 'Request fulfilled, document follows'],
+      201 => ['Created', 'Document created, URL follows'],
+      202 => ['Accepted', 'Request accepted, processing continues off-line'],
+      203 => ['Non-Authoritative Information', 'Request fulfilled from cache'],
+      204 => ['No Content', 'Request fulfilled, nothing follows'],
+      205 => ['Reset Content', 'Request processed, no content returned, reset document view, clear input form for further input.'],
+      206 => ['Partial Content', 'partial resource return due to request header.'],
+      207 => ['Multi-Status', 'WebDAV; RFC 4918, XML, can contain multiple separate responses.'],
+      208 => ['Already Reported', 'WebDAV; RFC 5842, results previously returned.'],
+      226 => ['Im Used', 'request fulfilled, reponse is instance-manipulations.'],
+      300 => ['Multiple Choices', 'Object has several resources -- see URI list'],
+      301 => ['Moved Permanently', 'Object moved permanently -- see URI list'],
+      302 => ['Found', 'Object moved temporarily -- see URI list'],
+      303 => ['See Other', 'Object moved -- see Method and URL list'],
+      304 => ['Not Modified', 'Document has not changed since given time'],
+      305 => ['Use Proxy', 'Content located elsewhere, retrieve from there.'],
+      306 => ['Switch Proxy', 'Subsequent requests should use the specified proxy'],
+      307 => ['Temporary Redirect', 'Connect again to different URI as provided.'],
+      308 => ['Permanent Redirect', 'Connect again to a different URI using the same method.'],
+      400 => ['Bad Request', 'Bad request syntax or unsupported method'],
+      401 => ['Unauthorized', 'No permission -- see authorization schemes'],
+      402 => ['Payment Required', 'No payment -- see charging schemes'],
+      403 => ['Forbidden', 'Request forbidden -- authorization will not help'],
+      404 => ['Not Found', 'Nothing matches the given URI'],
+      405 => ['Method Not Allowed', 'Specified method is invalid for this resource.'],
+      406 => ['Not Acceptable', 'URI not available in preferred format.'],
+      407 => ['Proxy Authentication Required', 'You must authenticate with this proxy before proceeding.'],
+      408 => ['Request Timeout', 'Request timed out; try again later.'],
+      409 => ['Conflict', 'Request conflict.'],
+      410 => ['Gone', 'URI no longer exists and has been permanently removed.'],
+      411 => ['Length Required', 'Client must specify Content-Length.'],
+      412 => ['Precondition Failed', 'Precondition in headers is false.'],
+      413 => ['Payload Too Large', 'Payload is too large.'],
+      414 => ['Request-URI Too Long', 'URI is too long.'],
+      415 => ['Unsupported Media Type', 'Entity body in unsupported format.'],
+      416 => ['Requested Range Not Satisfiable', 'Cannot satisfy request range.'],
+      417 => ['Expectation Failed', 'Expect condition could not be satisfied.'],
+      418 => ["I'm a teapot", 'The HTCPCP server is a teapot'],
+      419 => ['Authentication Timeout', 'previously valid authentication has expired'],
+      420 => ['Method Failure / Enhance Your Calm', 'Spring Framework / Twitter'],
+      422 => ['Unprocessable Entity', 'WebDAV; RFC 4918, Request unable to be followed due to semantic errors.'],
+      423 => ['Locked', 'WebDAV; RFC 4918, Resource that is being accessed is locked.'],
+      424 => ['Failed Dependency / Method Failure', 'WebDAV; RFC 4918,  Request failed due to failure of a previous request.'],
+      425 => ['Unordered Collection', 'Internet draft'],
+      426 => ['Upgrade Required', 'client should switch to a different protocol'],
+      428 => ['Precondition Required', 'RFC 6585, Origin server requires the request to be conditional.'],
+      429 => ['Too Many Requests', 'RFC 6585, User has sent too many requests in a given amount of time.'],
+      431 => ['Request Header Fields Too Large', 'RFC 6585, Server is unwilling to process the request.'],
+      440 => ['Login Timeout', 'Microsoft'],
+      444 => ['No Response', 'Nginx Server returns no information and closes the connection.'],
+      449 => ['Retry With', 'Microsoft, Request should be retried after performing action.'],
+      450 => ['Blocked by Windows Parental Controls', 'Microsoft, Windows Parental Controls blocking access to webpage.'],
+      451 => ['Unavailable For Legal Reasons', "RFC 7725,  The server cannot reach the client's mailbox."],
+      494 => ['Request Header Too Large', 'Nginx'],
+      495 => ['Cert Error', 'Nginx'],
+      496 => ['No Cert', 'Nginx'], 
+      497 => ['HTTP to HTTPS', 'Nginx'],
+      498 => ['Token expired/invalid', 'Esri'],
+      499 => ['Client Closed Request', 'Nginx, Connection closed by client while HTTP server is processing.'],
+      500 => ['Internal Server Error', 'Server got itself in trouble'],
+      501 => ['Not Implemented', 'Server does not support this operation'],
+      502 => ['Bad Gateway', 'Invalid responses from another server/proxy.'],
+      503 => ['Service Unavailable', 'The server cannot process the request due to a high load'],
+      504 => ['Gateway Timeout', 'The gateway server did not receive a timely response'],
+      505 => ['HTTP Version Not Supported', 'Cannot fulfill request, Server does not support the HTTP protocol version.'],
+      506 => ['Variant Also Negotiates', 'RFC 2295, Content negotiation for the request results in a circular reference.'],
+      507 => ['Insufficient Storage', 'WebDAV; RFC 4918, Server is unable to store the representation.'],
+      508 => ['Loop Detected', 'WebDAV; RFC 5842, Server detected an infinite loop while processing the request.'],
+      509 => ['Bandwidth Limit Exceeded', 'Apache bw/limited extension'],
+      510 => ['Not Extended', 'RFC 2774, Further extensions to the request are required.'],
+      511 => ['Network Authentication Required', 'RFC 6585, Client needs to authenticate to gain network access.'],
+      598 => ['Network read timeout error', 'Network read timeout behind the proxy.'],
+      599 => ['Network connect timeout error', 'Network connect timeout behind the proxy.'],
+   );
+
+   my $find = 0;
+   foreach my $key ( sort keys %status_code ) {
+      if( $key =~ m/$code/i ) {
+          $find = 1;
+          printf("  Status code: %s\n  Message: %s\n  Code explanation: %s\n\n", $key,
+                 ($status_code{$key})->[0], ($status_code{$key})->[1]);
+      }
+   }
+   printf("No code found corresponding to: %s\n", $code) if $find == 0;
+}
+
+unless ( defined $code) {
+  print "no code specified. use with -c option.\n";
+  exit 1;
+}
+else {
+  if( is_valid($code) ) {
+    code_display($code);
+  }
+  else {
+    printf("unknown http status code: %s\n", $code);
+    exit 1;
+  }
+}
+
+
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut

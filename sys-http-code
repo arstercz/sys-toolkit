@@ -11,7 +11,7 @@ sys-http-code - Explains the meaning of an HTTP status code.
     use sys-http-code --help for more info.
 
     options:
-       code|c: http status code, eg: 200, 404, 30x(x means any digit)
+       code|c: http status code, eg: 200, 404, 30x(x means any digit), all(list all code)
        help|h: print help info.
 
     read more:

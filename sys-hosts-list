@@ -1,0 +1,65 @@
+#!/bin/bash
+# Output the ip or host of the /etc/hosts 
+# zhe.chen<chenzhe07@gmail.com>
+
+exec 2>&1
+
+if [ $# -ne 1 ]; then
+   echo "Usage: sys-hosts-list [ip|host]"
+   exit 1;
+fi
+
+export TAG_HOST=$1
+
+if [[ $TAG_HOST != "ip" && $TAG_HOST != "host" ]]; then
+    echo "option must be ip or host"
+	exit 1;
+fi
+
+HOSTS="/etc/hosts"
+if [ ! -e $HOSTS ]; then
+   echo "$HOSTS does not exists."
+   exit 1
+fi
+
+cat /etc/hosts | perl -ne '
+   use Data::Dumper;
+   BEGIN {
+       my %all_hash = ();
+	   sub remove_dup_array {
+	       my %count;
+		   return grep { ++$count{$_} < 2 } @_;
+	   }
+   };
+
+   chomp; 
+   my @list=split(/\s+/, $_, 2); #split to 2 columns
+   
+   my @name = split(/\s+/, $list[1]);
+   if ( @{$all_hash{$list[0]}} + 0 > 0 ) {
+       push @{$all_hash{$list[0]}}, @name;
+   }
+   else {
+       $all_hash{$list[0]} = [ @name ]; 
+   }
+
+   END{
+       $| = 1;
+       if ( $ENV{TAG_HOST} eq "ip" ) {
+           for my $ip ( sort keys %all_hash ) {
+               print " " x 3 . $ip . "\n";   
+           } 
+       }
+   
+       if ( $ENV{TAG_HOST} eq "host" ) {
+           my @host_info;
+	       for my $host ( sort { $a <=> $b } values %all_hash ) {
+			   foreach (@$host) {
+                   push @host_info, $_;
+               }
+           }
+		   print " " x 3 . join("\n" . " " x 3, remove_dup_array(@host_info)) . "\n";
+       }
+   };
+   
+   '

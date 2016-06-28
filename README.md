@@ -19,6 +19,7 @@ Table of Contents
 * [sys-shell-type](#sys-shell-type)
 * [sys-diskstats](#sys-diskstats)
 * [sys-http-code](#sys-http-code)
+* [sys-hosts-list](#sys-hosts-list)
 * [sys-memory-maps](#sys-memory-maps)
 * [sys-mem-redis-summary](#sys-mem-redis-summary)
 * [sys-mysql-summary](#sys-mysql-summary)
@@ -927,6 +928,36 @@ $ ./sys-http-code -c all
 ```
 
 help message: ./sys-http-code -h
+
+[Back to TOC](#table-of-contents)
+
+sys-hosts-list
+==============
+
+`type: shell`
+
+Output the ip or host for the file: /etc/hosts
+
+#### Usage
+
+```
+# output ip list
+./sys-hosts-list ip
+   10.3.254.2
+   10.3.254.3
+   127.0.0.1
+   ::1
+
+# output host list
+./sys-hosts-list host
+   localhost
+   localhost.localdomain
+   localhost4
+   z2.com
+   z3
+```
+
+help message: ./sys-hosts-list [ip|host]
 
 [Back to TOC](#table-of-contents)
 

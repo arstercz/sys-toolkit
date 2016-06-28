@@ -32,7 +32,12 @@ cat /etc/hosts | perl -ne '
 	   }
    };
 
-   chomp; 
+   chomp;
+   if( /^$/ || /^\s*#/ ) {
+      next;
+   }
+   $_ =~ s/([^#].*?)\s*#.*$/$1/g;
+
    my @list=split(/\s+/, $_, 2); #split to 2 columns
    
    my @name = split(/\s+/, $list[1]);
@@ -54,12 +59,12 @@ cat /etc/hosts | perl -ne '
        if ( $ENV{TAG_HOST} eq "host" ) {
            my @host_info;
 	       for my $host ( sort { $a <=> $b } values %all_hash ) {
-			   foreach (@$host) {
+               foreach (@$host) {
                    push @host_info, $_;
                }
            }
-		   print " " x 3 . 
-               join("\n" . " " x 3, sort(remove_dup_array(@host_info))) . "\n";
+           print " " x 3 . 
+              join("\n" . " " x 3, sort(remove_dup_array(@host_info))) . "\n";
        }
    };
    

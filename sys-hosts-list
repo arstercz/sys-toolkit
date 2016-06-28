@@ -58,7 +58,8 @@ cat /etc/hosts | perl -ne '
                    push @host_info, $_;
                }
            }
-		   print " " x 3 . join("\n" . " " x 3, remove_dup_array(@host_info)) . "\n";
+		   print " " x 3 . 
+               join("\n" . " " x 3, sort(remove_dup_array(@host_info))) . "\n";
        }
    };
    

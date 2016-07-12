@@ -42,7 +42,7 @@ GetOptions(
     "charset|c=s"  => \$charset,
     "verbose|v!"   => \$verbose,
     "help!"        => \$help,
-    "interval|i"   => \$interval,
+    "interval|i=i" => \$interval,
 ) or die "option error: $!";
 
 if ($help) {

@@ -160,7 +160,7 @@ my $dbh = $dbpre->get_dbh( $database, { AutoCommit => 1 } ) or
 my $sql_status_info =<<"SQL_END";
 SHOW GLOBAL STATUS 
 WHERE variable_name IN 
-   ('Questions', 'Com_select', 'Com_update', 'Com_insert'
+   ('Questions', 'Com_select', 'Com_update', 'Com_insert',
     'Com_delete', 'Threads_connected', 'Threads_created', 'Threads_running', 
     'Innodb_rows_inserted', 'Innodb_rows_read', 'Innodb_rows_updated', 
     'Innodb_rows_deleted', 'Bytes_received','Bytes_sent')

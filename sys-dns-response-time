@@ -1,0 +1,136 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-dns-response-time - Measure the dns server response time.
+
+=cut
+
+=head1 SYNOPSIS
+
+use sys-dns-response-time -h from more info.
+
+=cut
+
+use strict;
+use warnings FATAL => 'all';
+use Net::DNS;
+use Getopt::Long qw(:config no_ignore_case);
+use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
+use List::Util qw(min max sum);
+use Data::Dumper;
+use English '-no-match-vars';
+
+my $domain;
+my $recursive = 0;
+my $verbose   = 0;
+my $repeate   = 3;
+my $delay     = 0.5;
+my $timeout   = 5;
+my $help      = 0;
+
+
+GetOptions(
+   "h!"   => \$help,
+   "d=s"   => \$domain,
+   "r!"    => \$recursive,
+   "v!"    => \$verbose,
+   "n=i"   => \$repeate,
+   "t=i"   => \$timeout,
+);
+
+if ($help) {
+   usage($0);
+}
+
+sub usage {
+   my $name = shift;
+   system("perldoc $name");
+   exit 0;
+}
+
+unless($domain) {
+   print "option domain can't empty!";
+   exit 1;
+}
+
+my $res = Net::DNS::Resolver->new(
+   recurse => $recursive,
+   debug   => $verbose,
+   retrans => $timeout,
+   retry   => 1,
+   persistent_upd => 0,   #If set to true, Net::DNS will keep a single UDP socket open for all queries
+   igntc          => 1,   #If true truncated packets will be ignored. If false truncated packets will cause the query to be retried
+   dnssec         => 0,   #disable EDNS0 (extended) queries and disables checking flag (cdflag)
+   unppacketsize  => 512, #default= 512, if larger than Net::DNS::PACKETSZ() an EDNS extension will be added
+) or die "dns error:$!";
+
+my @elapsed;
+my($t0, $t1, $startTime);
+
+$startTime = [gettimeofday];
+
+while( $repeate >= 0 && $repeate-- ) {
+   $t0 = [gettimeofday];
+   my $query = $res->send($domain, 'A');
+   $t1 = [gettimeofday];  # microseconds
+   $elapsed[$repeate] = int(tv_interval($t0, $t1)*1000);
+   if($query) {
+      if( !($query->header->rcode eq "NOERROR") ) {
+	     $elapsed[$repeate] = "error: $query->header->rcode";  #query returned error
+	  }
+	  elsif ($query->header->ancount == 0) {
+	     $elapsed[$repeate] = "error: can't resolve into an A record";  #did not resolve into an A record
+	  }
+   }
+   else {
+      $elapsed[$repeate] = "error: timeout occurred"; # timeout occurred
+   }
+   print "query from dns server: " . $query->answerfrom . ", " . 
+         "elapsed ms: " . $elapsed[$repeate] . "\n";
+   select(undef, undef, undef, $delay);
+}
+
+# #########################################################################################################
+# Documentation
+# #########################################################################################################
+
+=head1 OPTIONS
+
+=over 4
+
+=item h=s
+
+print help info.
+
+=item d=s
+
+domain name string, such as 'highdb.com'
+
+=item r
+
+weather enable dns lookup recursively or not, default is disabled.
+
+=item v
+
+print verbose message, default is disabled.
+
+=item n=i
+
+dns lookup for n times. default is 3.
+
+=item t=i
+
+dns lookup timeout, default is 5 seconds.
+
+=back
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+initinal version.
+
+=cut

@@ -31,6 +31,7 @@ my $charset  = 'utf8';
 my $help     = 0;
 my $verbose  = 0;
 my $interval = 1;
+my $loop     = 1000;
 
 GetOptions(
     "host|h=s"     => \$host,
@@ -43,6 +44,7 @@ GetOptions(
     "verbose|v!"   => \$verbose,
     "help!"        => \$help,
     "interval|i=i" => \$interval,
+    "loop|l=i"     => \$loop,
 ) or die "option error: $!";
 
 if ($help) {
@@ -175,11 +177,11 @@ print   " " x $addr_len . "|"
        . "\n";
 
 printf("%s%-12s|%6s%5s%5s%6s%7s | %8s%8s%8s%8s | %4s%5s%5s | %-15s%-15s\n",
-       " " x ($addr_len - 20) . 'addr' . " " x 4, 'time','ins', 'upd', 'del', 'sel', 'qps', 
+       " " x ($addr_len - 20) . 'addr' . " " x 3, 'time','ins', 'upd', 'del', 'sel', 'qps', 
        'ins', 'upd', 'del', 'read', 'run', 'conn', 'cre', " " x 5 . 'recv', " " x 5 . 'send');
 
 
-my $n = 100;
+my $n = $loop;
 while ($n--) {
    my $item_info = $dbh->selectall_arrayref($sql_status_info);
    foreach my $status (@$item_info) {
@@ -211,23 +213,23 @@ while ($n--) {
            elsif ( $name eq 'Innodb_rows_deleted' ) {
                $db_state{'rdel'} = $last_value;
            }
-           elsif ( $name eq 'Innodb_rows_insert' ) {
+           elsif ( $name eq 'Innodb_rows_inserted' ) {
                $db_state{'rins'} = $last_value;
            }
-           elsif ( $name eq 'Innodb_rows_update' ) {
+           elsif ( $name eq 'Innodb_rows_updated' ) {
                $db_state{'rupd'} = $last_value;
            }
-           elsif ( $name eq 'Innodb_rows_select' ) {
+           elsif ( $name eq 'Innodb_rows_read' ) {
                $db_state{'rread'} = $last_value;
            }
            elsif ( $name eq 'Threads_connected' ) {
-               $db_state{'conn'} = $last_value;
+               $db_state{'conn'} = $value;
            }
            elsif ( $name eq 'Threads_created' ) {
                $db_state{'cre'} = $last_value;
            }
            elsif ( $name eq 'Threads_running' ) {
-               $db_state{'run'} = $last_value;
+               $db_state{'run'} = $value;
            }
            else {
 
@@ -240,7 +242,7 @@ while ($n--) {
            print "error: $@";
        }
    }
-   print_state( get_time(), \%db_state ) if $n < 99;
+   print_state( get_time(), \%db_state ) if $n < $loop - 1;
    sleep $interval;
 }
 # ###################################################################

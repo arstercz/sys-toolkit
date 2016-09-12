@@ -20,6 +20,7 @@ Table of Contents
 * [sys-diskstats](#sys-diskstats)
 * [sys-http-code](#sys-http-code)
 * [sys-hosts-list](#sys-hosts-list)
+* [sys-dns-response-time](#sys-dns-response-time)
 * [sys-memory-maps](#sys-memory-maps)
 * [sys-mem-redis-summary](#sys-mem-redis-summary)
 * [sys-mysql-summary](#sys-mysql-summary)
@@ -959,6 +960,32 @@ Output the ip or host for the file: /etc/hosts
 
 help message: ./sys-hosts-list [ip|host]
 
+[Back to TOC](#table-of-contents)
+
+sys-dns-response-time
+=====================
+
+`type: perl`
+
+Measure the dns server response time.
+
+#### Dependency
+
+```
+perl-Net-DNS
+```
+`centos/redhat can install bind-utils so that perl-Net-DNS lookup domain easily`
+
+#### Usage
+
+```
+$ ./sys-dns-response-time -d highdb.com
+query from dns server: 114.114.114.114, elapsed ms: 31
+query from dns server: 114.114.114.114, elapsed ms: 29
+query from dns server: 114.114.114.114, elapsed ms: 28
+```
+
+help message: `./sys-dns-response-time -h`
 [Back to TOC](#table-of-contents)
 
 License

@@ -1003,8 +1003,8 @@ kill the tcp close_wait state connections without restart server program.
 $ netstat -tulnap|grep CLOSE | grep '10.0.21.17'
 tcp        0      0 ::ffff:10.0.21.5:7200    ::ffff:10.0.21.17:55365    CLOSE_WAIT  2681/./audit_server
 
-$ ./sys-kill-close-wait --src_host 10.3.246.37 --src_port 55717 --dst_host 10.3.254.119 --dst_port 7200
-kill close_wait connection 10.3.246.37:55365 => 10.3.254.119:7200
+$ ./sys-kill-close-wait --src_host 10.0.21.17 --src_port 55365 --dst_host 10.0.21.5 --dst_port 7200
+kill close_wait connection 10.0.21.17:55365 => 10.0.21.5:7200
 send ack ok!
 ```
 

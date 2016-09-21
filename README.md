@@ -21,6 +21,7 @@ Table of Contents
 * [sys-http-code](#sys-http-code)
 * [sys-hosts-list](#sys-hosts-list)
 * [sys-dns-response-time](#sys-dns-response-time)
+* [sys-kill-close-wait](#sys-kill-close-wait)
 * [sys-memory-maps](#sys-memory-maps)
 * [sys-mem-redis-summary](#sys-mem-redis-summary)
 * [sys-mysql-summary](#sys-mysql-summary)
@@ -986,6 +987,29 @@ query from dns server: 114.114.114.114, elapsed ms: 28
 ```
 
 help message: `./sys-dns-response-time -h`
+
+[Back to TOC](#table-of-contents)
+
+sys-kill-close-wait
+===================
+
+`type: perl`
+
+kill the tcp close_wait state connections without restart server program.
+
+#### Usage
+
+```
+$ netstat -tulnap|grep CLOSE | grep '10.0.21.17'
+tcp        0      0 ::ffff:10.0.21.5:7200    ::ffff:10.0.21.17:55365    CLOSE_WAIT  2681/./audit_server
+
+$ ./sys-kill-close-wait --src_host 10.3.246.37 --src_port 55717 --dst_host 10.3.254.119 --dst_port 7200
+kill close_wait connection 10.3.246.37:55365 => 10.3.254.119:7200
+send ack ok!
+```
+
+help message: `./sys-kill-close-wait -h`
+
 [Back to TOC](#table-of-contents)
 
 License

@@ -284,6 +284,12 @@ no thread_id blocking.
  sys-mysql-killblockthread -h 127.0.0.1 -P 3306 -u root --askpass -v
 Enter password : 
 connect to 127.0.0.1, 3306, root, xxxxxxxx ...
+waiting_thread_id:  4
+waiting_query:      delete from t1 where a = 1
+waiting_time:       5
+blocking_host:      10.0.21.5:53150
+blocking_thread_id: 18
+blocking_query:     null
 kill 100123 ok.
 kill 100251 ok.
 ```

@@ -111,29 +111,34 @@ my $cur_threadid = $dbh->{'mysql_thread_id'};
 my $sql_block_info =<<"SQL_END";
 SELECT
     r.trx_id waiting_trx_id, r.trx_mysql_thread_id waiting_thread, 
-    r.trx_query waiting_query,b.trx_id blocking_trx_id, 
-    b.trx_mysql_thread_id blocking_thread, b.trx_query blocking_query
+    ifnull(r.trx_query, 'null') waiting_query, 
+    timestampdiff(SECOND, r.trx_wait_started, CURRENT_TIMESTAMP) wait_time,
+	p.HOST blocking_host, b.trx_mysql_thread_id blocking_thread, 
+    ifnull(b.trx_query, 'null') blocking_query, b.trx_id blocking_trx_id
 FROM information_schema.innodb_lock_waits w
 INNER JOIN information_schema.innodb_trx b
 ON b.trx_id = w.blocking_trx_id
 INNER JOIN information_schema.innodb_trx r
 ON r.trx_id = w.requesting_trx_id
+LEFT JOIN information_schema.PROCESSLIST p ON p.ID = b.trx_mysql_thread_id
 SQL_END
 
 my $block_thread_info = $dbh->selectall_arrayref($sql_block_info);
 my %thread_id;
 foreach my $thread (@$block_thread_info) {
-   my ($waiting_thread_id, $waiting_query, $blocking_thread, 
-                           $blocking_query) = @$thread[1,4];
+   my ($waiting_thread_id, $waiting_query, $waiting_time, $blocking_host,
+		         $blocking_thread_id, $blocking_query) = (@$thread)[1..6];
 
-   print "waiting_thread_id: $waiting_thread_id\n
-          waiting_query:     $waiting_query\n
-          blocking_thread:   $blocking_thread\n 
-          blocking_query:    $blocking_query" 
-          if $verbose;
+   print "waiting_thread_id:  $waiting_thread_id\n"
+       . "waiting_query:      $waiting_query\n"
+       . "waiting_time:       $waiting_time\n"
+       . "blocking_host:      $blocking_host\n"
+       . "blocking_thread_id: $blocking_thread_id\n" 
+       . "blocking_query:     $blocking_query\n" 
+   if $verbose;
 
-   if(defined $blocking_thread) {
-     $thread_id{$blocking_thread}++;
+   if(defined $blocking_thread_id) {
+     $thread_id{$blocking_thread_id}++;
    }
 }
 

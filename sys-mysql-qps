@@ -291,7 +291,11 @@ print help info.
 
 =item interval | i
 
-specify the interval time that collect db status, default is 5 seconds.
+specify the interval time that collect db status, default is 1 seconds.
+
+=item loop | l
+
+specify execute times that collect db status, default is 1000.
 
 =back
 

@@ -1021,6 +1021,7 @@ sys-traffic-capture
 ===================
 
 `type: shell`
+
 capture interface packets when traffic greater than a value  
 
 ### need:

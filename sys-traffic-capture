@@ -41,10 +41,10 @@ traffic_diff() {
    let "diff=($trafficB - $trafficA)/$3"
    echo $diff | perl -ne '
       chomp;
-	  $_ = $_ > 0
-	     ? int($_)
-		 : 0;
-	  print;
+      $_ = $_ > 0
+         ? int($_)
+         : 0;
+      print;
    '
 }
 
@@ -59,17 +59,17 @@ PACKET=1000
 # ensure that traffic threshold in continue period time
 while [[ $x -lt $COUNT ]]; do
     tdiff=$(traffic_diff $IFACE $TDIRE $INTERVAL)
-	# TWARN should in bytes unit
+    # TWARN should in bytes unit
     if [[ $tdiff -gt $TWARN ]]; then 
         x=$(($x+1))
-	else
-	    x=0
+    else
+        x=0
     fi
 done
 
 if [[ x -eq $COUNT ]]; then
     suff=$(date +%F-%T | tr ':-' '_')
-	if /usr/sbin/tcpdump -S -s0 -nn -U -i $IFACE -c $PACKET -w $IFACE-$suff.pcap 2>/dev/null; then
+    if /usr/sbin/tcpdump -S -s0 -nn -U -i $IFACE -c $PACKET -w $IFACE-$suff.pcap 2>/dev/null; then
         log "capture $IFACE $PACKET packets into $IFACE-$suff.pcap"
     else
         warn "capture interface $IFACE error"

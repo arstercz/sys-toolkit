@@ -1,0 +1,77 @@
+#!/bin/bash
+# interface traffic monitor and tcpdump capture
+# cz 20161022
+
+set -e
+[[ "$TRACE" ]] && set -x
+
+ts() {
+   TS=$(date +%F-%T | tr ':-' '_')
+   echo "$TS $*"
+}
+
+log() {
+   ts "[info] $*" 
+}
+
+warn() {
+   ts "[warn] $*" >&2
+   exit 1
+}
+
+if [ $# -ne 3 ]; then
+   warn "$0 interface in/out warn"
+fi
+
+if [[ ! $2 = 'in' && ! $2 = 'out' ]]; then
+   warn "2th parameter should be in or out"
+fi
+
+traffic_diff() {
+   # interface in/out interval
+   if [[ $2 = "in" ]]; then
+       st="rx_bytes"
+   else 
+       st="tx_bytes"
+   fi
+   trafficA=$(cat /sys/class/net/$1/statistics/$st)
+   sleep 1
+   trafficB=$(cat /sys/class/net/$1/statistics/$st)
+   diff=$(expr $trafficB - $trafficA)
+   let "diff=($trafficB - $trafficA)/$3"
+   echo $diff | perl -ne '
+      chomp;
+	  $_ = $_ > 0
+	     ? int($_)
+		 : 0;
+	  print;
+   '
+}
+
+IFACE=$1
+TDIRE=$2
+TWARN=$3 # bytes
+x=0
+COUNT=3
+INTERVAL=2
+PACKET=1000
+
+# ensure that traffic threshold in continue period time
+while [[ $x -lt $COUNT ]]; do
+    tdiff=$(traffic_diff $IFACE $TDIRE $INTERVAL)
+	# TWARN should in bytes unit
+    if [[ $tdiff -gt $TWARN ]]; then 
+        x=$(($x+1))
+	else
+	    x=0
+    fi
+done
+
+if [[ x -eq $COUNT ]]; then
+    suff=$(date +%F-%T | tr ':-' '_')
+	if /usr/sbin/tcpdump -S -s0 -nn -U -i $IFACE -c $PACKET -w $IFACE-$suff.pcap 2>/dev/null; then
+        log "capture $IFACE $PACKET packets into $IFACE-$suff.pcap"
+    else
+        warn "capture interface $IFACE error"
+    fi	
+fi

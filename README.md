@@ -17,6 +17,7 @@ Table of Contents
 * [sys-php-chroot](#sys-php-chroot)
 * [sys-tcp-port-proxy](#sys-tcp-port-proxy)
 * [sys-shell-type](#sys-shell-type)
+* [sys-traffic-capture](#sys-traffic-capture)
 * [sys-diskstats](#sys-diskstats)
 * [sys-http-code](#sys-http-code)
 * [sys-hosts-list](#sys-hosts-list)
@@ -1015,6 +1016,24 @@ send ack ok!
 ```
 
 help message: `./sys-kill-close-wait -h`
+
+sys-traffic-capture
+===================
+
+`type: shell`
+capture interface packets when traffic greater than a value  
+
+### need:
+
+   ```
+   tcpdump
+   ```
+#### Usage:
+capture when interface em1's traffic greater than  1000000 bytes
+```
+$ bash sys-traffic-capture em1 in 1000000
+2016_10_22_11_21_19 [info] capture em1 300000 packets into em1-2016_10_22_11_21_15.pcap
+```
 
 [Back to TOC](#table-of-contents)
 

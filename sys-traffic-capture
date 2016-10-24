@@ -1,5 +1,5 @@
 #!/bin/bash
-# interface traffic monitor and tcpdump capture
+# interface traffic monitor and use tcpdump to capture
 # cz 20161022
 
 set -e
@@ -54,7 +54,7 @@ TWARN=$3 # bytes
 x=0
 COUNT=3
 INTERVAL=2
-PACKET=1000
+PACKET=300000
 
 # ensure that traffic threshold in continue period time
 while [[ $x -lt $COUNT ]]; do

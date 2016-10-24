@@ -1030,7 +1030,7 @@ capture interface packets when traffic greater than a value
    tcpdump
    ```
 #### Usage:
-capture when interface em1's traffic greater than  1000000 bytes
+capture when interface em1's in traffic greater than  1000000 bytes
 ```
 $ bash sys-traffic-capture em1 in 1000000
 2016_10_22_11_21_19 [info] capture em1 300000 packets into em1-2016_10_22_11_21_15.pcap

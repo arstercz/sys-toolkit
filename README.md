@@ -2,6 +2,8 @@
 
 Some useful scripts to sysadmins/dbas.
 
+Read [INSTALL](INSTALL.md) to install toolkit.
+
 Table of Contents
 =================
 
@@ -1016,6 +1018,8 @@ send ack ok!
 ```
 
 help message: `./sys-kill-close-wait -h`
+
+[Back to TOC](#table-of-contents)
 
 sys-traffic-capture
 ===================

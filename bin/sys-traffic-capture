@@ -75,3 +75,37 @@ if [[ x -eq $COUNT ]]; then
         warn "capture interface $IFACE error"
     fi	
 fi
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-traffic-capture - capture interface packets when traffic greater than a value.
+
+=head1 Need
+
+tcpdump
+
+=head1 SYNOPSIS
+
+  Usage: sys-traffic-capture [interface] [in/out] value
+  
+  eg:
+     # capture when interface em1's in traffic greater than 1000000 bytes
+
+     $ bash sys-traffic-capture em1 in 1000000
+     2016_10_22_11_21_19 [info] capture em1 300000 packets into em1-2016_10_22_11_21_15.pcap
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-traffic-capture 0.1.0
+
+=cut
+
+DOCUMENTATION

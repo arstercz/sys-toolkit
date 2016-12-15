@@ -49,3 +49,33 @@ cat $MAPS | perl -ne '
     }
 '
 
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-memory-maps - See the memory mapping of a process.
+
+
+=head1 SYNOPSIS
+
+  Usage: sys-memory-maps [pid]
+  
+  eg:
+     $ ./sys-memory-maps 25005
+     share   =   100164 Kbytes
+     private =    39332 Kbytes
+     total   =   139496 Kbytes (   71.80 % shareable)
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-memory-maps 0.1.0
+
+=cut
+
+DOCUMENTATION

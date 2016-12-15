@@ -69,3 +69,43 @@ cat /etc/hosts | perl -ne '
    };
    
    '
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-hosts-list - Output the ip or host for the file: /etc/hosts
+
+=head1 SYNOPSIS
+
+  Usage: sys-hosts-list [ip/host]
+  
+  eg:
+     # output ip list
+     ./sys-hosts-list ip
+        10.3.254.2
+        10.3.254.3
+        127.0.0.1
+        ::1
+
+     # output host list
+     ./sys-hosts-list host
+        localhost
+        localhost.localdomain
+        localhost4
+        z2.com
+        z3
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-hosts-list 0.1.0
+
+=cut
+
+DOCUMENTATION

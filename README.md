@@ -2,6 +2,8 @@
 
 Some useful scripts to sysadmins/dbas.
 
+Read [INSTALL](INSTALL.md) to install toolkit.
+
 Table of Contents
 =================
 

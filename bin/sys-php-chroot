@@ -132,3 +132,37 @@ EOF
 
 cat $CHROOT_DIR.README
 
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-php-chroot - php chroot initialization work, covering DNS , php iconv and and ssl(https).
+
+=head1 SYNOPSIS
+
+  Usage: sys-php-chroot [path_chroot]
+  
+  eg:
+     $ ./sys-php-chroot /web/php/chroot
+     tar: Removing leading `/' from member names
+     ...
+     chroot directory /web/php/chroot initialized as
+        162    0 drwxr-xr-x   7 root     root           71 Mar 11 14:58 /web/php/chroot
+     ...
+
+     Calling ssl secured sites via curl in an chroot env, some /usr/lib64 library was needed:
+     http://jameskirsop.com/calling-ssl-secured-sites-via-curl-in-an-apache-chroot/
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-php-chroot 0.1.0
+
+=cut
+
+DOCUMENTATION

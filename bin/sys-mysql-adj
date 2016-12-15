@@ -31,3 +31,39 @@ for mysql_pid in $mysqlpids; do
       fi
    fi
 done
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-mysql-adj - prevent system killing local host MySQL process by oom-killer
+
+=head1 SYNOPSIS
+
+  Usage: sys-mysql-adj
+
+  eg:
+     $ ./sys-mysql-adj
+     oom_adj mysqld process
+     pid 31265 oom_adj = -17
+     pid 25653 oom_adj = -17
+     pid 20247 oom_adj = -17
+
+     $ ./sys-mysql-adj
+     no MySQL process
+
+  note: Can be used without args.
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-mysql-adj 0.1.0
+
+=cut
+
+DOCUMENTATION

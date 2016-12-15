@@ -17,3 +17,31 @@ fi
 $echocmd $* 1>&2
 
 exit $?
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-echo-stderr - echo message to STDERR.
+
+=head1 SYNOPSIS
+
+  Usage: sys-echo-stderr [message]
+
+  eg:
+    $ ./sys-echo-stderr hello world >1.txt 
+    hello world
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-echo-stderr 0.1.0
+
+=cut
+
+DOCUMENTATION

@@ -40,3 +40,64 @@ for mysql_pid in $mysqlpids; do
           echo "set pid $mysql_pid max_connections = $connection"
    fi
 done
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-mysql-set-maxconnections - Set local MySQL's max_connections to avoid error "Too many connections.."
+
+=head1 Risk
+
+Maybe crash when MySQL Server is very busy.
+
+=head1 Need
+
+gdb
+
+=head1 SYNOPSIS
+
+  Usage: sys-mysql-set-maxconnections [connections]
+  
+  eg:
+    $ mysql -p -e 'select @@max_connections'
+    Enter password:
+    +-------------------+
+    | @@max_connections |
+    +-------------------+
+    |               100 |
+    +-------------------+
+
+    $ ./sys-mysql-set-maxconnections 3000
+    [New LWP 9029]
+    [New LWP 30058]
+    [New LWP 28201]
+    ......
+    ......
+    [New LWP 27457]
+    [Thread debugging using libthread_db enabled]
+    0x00007fa0b2371113 in poll () from /lib64/libc.so.6
+    set pid 27454 max_connections = 3000
+
+    $ mysql -p -e 'select @@max_connections'
+    Enter password:
+    +-------------------+
+    | @@max_connections |
+    +-------------------+
+    |              3000 |
+    +-------------------+
+
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-mysql-set-maxconnections 0.1.0
+
+=cut
+
+DOCUMENTATION

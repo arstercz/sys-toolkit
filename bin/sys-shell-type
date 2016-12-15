@@ -38,3 +38,33 @@ fi
 # fallback
 echo "unknown"
 exit 0
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-shell-type - identifi the type of shell we used in current shell.
+
+=head1 SYNOPSIS
+
+  Usage: sys-shell-type
+  
+  eg:
+     $ ./sys-shell-type 
+     bash
+
+  note: Can be used without args.
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-shell-type 0.1.0
+
+=cut
+
+DOCUMENTATION

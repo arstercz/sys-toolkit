@@ -31,3 +31,34 @@ for url in $urls; do
       echo "curl $url error"
    fi
 done
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-pubip - Get my public ip address by curl command.
+
+=head1 SYNOPSIS
+
+  Usage: sys-pubip
+
+  eg:
+    $ ./sys-pubip 
+    Get public ip address:
+    110.89.157.218
+
+  note: Can be used without args, return error if execute 5 seconds.
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-pubip 0.1.0
+
+=cut
+
+DOCUMENTATION

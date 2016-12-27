@@ -36,17 +36,17 @@ my $verbose  = 0;
 my $threthold= 10;
 
 GetOptions(
-    "host|h=s"     => \$host,
-    "port|P=i"     => \$port,
-    "user|u=s"     => \$user,
-    "password|p=s" => \$password,
-    "askpass!"     => \$askpass,
-    "database|d=s" => \$database,
-    "charset|c=s"  => \$charset,
-    "kill|k!"      => \$kill,
-    "verbose|v!"   => \$verbose,
-    "threthold|t!" => \$threthold,
-    "help!"        => \$help,
+    "host|h=s"      => \$host,
+    "port|P=i"      => \$port,
+    "user|u=s"      => \$user,
+    "password|p=s"  => \$password,
+    "askpass!"      => \$askpass,
+    "database|d=s"  => \$database,
+    "charset|c=s"   => \$charset,
+    "kill|k!"       => \$kill,
+    "verbose|v!"    => \$verbose,
+    "threthold|t=i" => \$threthold,
+    "help!"         => \$help,
 ) or die "option error: $!";
 
 if ($help) {

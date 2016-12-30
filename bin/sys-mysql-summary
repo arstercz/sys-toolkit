@@ -39,7 +39,7 @@ GetOptions(
     "askpass!"     => \$askpass,
     "database|d=s" => \$database,
     "charset|c=s"  => \$charset,
-    "debug|d!"     => \$debug,
+    "debug|D!"     => \$debug,
     "help!"        => \$help,
 ) or die "error:$!";
 

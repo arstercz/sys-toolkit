@@ -22,6 +22,7 @@ use warnings;
 use Getopt::Long qw(:config no_ignore_case);
 use English '-no_match_vars';
 use Data::Dumper;
+use POSIX qw(strftime);
 
 my $host     = '127.0.0.1';
 my $port     = 3306;
@@ -93,6 +94,10 @@ sub noecho_password {
     return $response;
 }
 
+sub get_time {
+    return strftime("%Y-%m-%dT%H:%M:%S", localtime(time));
+}
+
 # get db handle
 printf( "connect to %s, %d, %s, xxxxxxxx ...\n", $host, $port, $user )
   if $verbose;
@@ -129,22 +134,23 @@ foreach my $thread (@$long_thread_info) {
                        $run_user, $run_host, $run_db, $run_state, $run_time, $run_query);
 }
 
+my $cur_time = get_time();
 my $count = keys %threads;
 if ($count == 0) {
-    print "no long time query.\n";
+    print "$cur_time no long time query.\n";
     exit 0;
 }
 
 foreach my $thread (sort keys %threads) {
-   print "[INFO] thread: $thread, @{[ $threads{$thread} ]}\n" if $verbose;
+   print "$cur_time [INFO] thread: $thread, @{[ $threads{$thread} ]}\n" if $verbose;
    if ($kill) {
        eval {
            $dbh->do("kill $thread");
        };
        if($@) {
-           warn "kill $thread error: $@\n" 
+           warn "$cur_time kill $thread error: $@\n" 
        } else {
-           print "kill $thread ok\n";
+           print "$cur_time kill $thread ok\n";
        }
    }
 }

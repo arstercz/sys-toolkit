@@ -20,6 +20,7 @@ use strict;
 use warnings;
 use Getopt::Long qw(:config no_ignore_case);
 use English '-no_match_vars';
+use POSIX qw(strftime);
 
 my $host     = '127.0.0.1';
 my $port     = 3306;
@@ -91,6 +92,10 @@ sub noecho_password {
     return $response;
 }
 
+sub get_time {
+    return strftime("%Y-%m-%dT%H:%M:%S", localtime(time));
+}
+
 # get db handle
 printf( "connect to %s, %d, %s, xxxxxxxx ...\n", $host, $port, $user )
   if $verbose;
@@ -125,11 +130,13 @@ SQL_END
 
 my $block_thread_info = $dbh->selectall_arrayref($sql_block_info);
 my %thread_id;
+my $cur_time = get_time();
 foreach my $thread (@$block_thread_info) {
    my ($waiting_thread_id, $waiting_query, $waiting_time, $blocking_host,
 		         $blocking_thread_id, $blocking_query) = (@$thread)[1..6];
 
-   print "waiting_thread_id:  $waiting_thread_id\n"
+   print "Time: " . $cur_time . "\n"
+       . "waiting_thread_id:  $waiting_thread_id\n"
        . "waiting_query:      $waiting_query\n"
        . "waiting_time:       $waiting_time\n"
        . "blocking_host:      $blocking_host\n"
@@ -144,7 +151,7 @@ foreach my $thread (@$block_thread_info) {
 
 my $count = keys %thread_id;
 if ($count == 0) {
-    print "no thread_id blocking.\n";
+    print "$cur_time no thread_id blocking.\n";
     exit 0;
 }
 
@@ -157,9 +164,9 @@ foreach my $thread (keys %thread_id) {
               $dbh->do("kill $thread");
        };
        if($@) {
-           warn "kill $thread error: $@\n" 
+           warn "$cur_time kill $thread error: $@\n" 
        } else {
-           print "kill $thread ok.\n";
+           print "$cur_time kill $thread ok.\n";
        }
    }
  }

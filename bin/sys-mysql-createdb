@@ -296,6 +296,11 @@ if (!check_grant($dbh, 'Show_db_priv')) {
    exit 1;
 }
 
+if (!check_grant($dbh, 'Grant_priv')) {
+   print "[warn] login user $user\@$host has no Grant_priv\n";
+   exit 1;
+}
+
 my @dbs = $dbh->func('_ListDBs');
 
 if( grep { $_ eq $createdb } @dbs ) {
@@ -303,41 +308,43 @@ if( grep { $_ eq $createdb } @dbs ) {
    exit 0;
 }
 else {
-   if (create_database($dbh, $createdb, \@dbs)) {
-      $account_pass ||= sprintf( "%s",
-                           join("", map{
-                              ("a".."z", "A".."Z", 
-                                0 .. 9, "+", "-", "_", "@",
-                                "!", "~", "^", "%", "{", "}",
-                              )[rand 72] 
-                            } 1..20) 
-                        );
-      if (grant_user($dbh, $account_user, $account_host, $account_pass) )
-      {
-         print "create database and user:\n"
-               . "\thost: $host\n"
-               . "\tport: $port\n"
-               . "\tdb  : $createdb\n"
-               . "\tuser: $account_user\n"
-               . "\tpass: $account_pass\n";
+   $account_pass ||= sprintf( "%s",
+                        join("", map{
+                           ("a".."z", "A".."Z", 
+                             0 .. 9, "+", "-", "_", "@",
+                             "!", "~", "^", "%", "{", "}",
+                           )[rand 72] 
+                         } 1..20) 
+                     );
+   if (grant_user($dbh, $account_user, $account_host, $account_pass) )
+   {
+      unless (create_database($dbh, $createdb, \@dbs)) {
+         print "[warn] can't create database: $createdb\n";
+         exit 1;
+      }
+      print "create database and user:\n"
+            . "\thost: $host\n"
+            . "\tport: $port\n"
+            . "\tdb  : $createdb\n"
+            . "\tuser: $account_user\n"
+            . "\tpass: $account_pass\n";
 
-         my $db_checkpre = MySQL::dbh->new(
-             host => $host,
-             port => $port,
-             user => $account_user,
-             password => $account_pass,
-             charset  => $charset,
-             driver   => 'mysql',
-         );
-         my $dbh_check = $db_checkpre->get_dbh( $createdb, { AutoCommit => 1 } ) or
-                            die "Can't get dbh ... $host:$port";
+      my $db_checkpre = MySQL::dbh->new(
+          host => $host,
+          port => $port,
+          user => $account_user,
+          password => $account_pass,
+          charset  => $charset,
+          driver   => 'mysql',
+      );
+      my $dbh_check = $db_checkpre->get_dbh( $createdb, { AutoCommit => 1 } ) or
+                         die "Can't get dbh ... $host:$port";
 
-         my $info = $dbh_check->selectrow_hashref("select 1") or
-                            die $dbh_check->errstr;
-         if ( defined $info->{'1'} && $info->{'1'} ) {
-             print "The user $account_user\@$account_host connect ok\n";
-             $dbh_check->disconnect();
-         }
+      my $info = $dbh_check->selectrow_hashref("select 1") or
+                         die $dbh_check->errstr;
+      if ( defined $info->{'1'} && $info->{'1'} ) {
+          print "The user $account_user\@$account_host connect ok\n";
+          $dbh_check->disconnect();
       }
    }
 }

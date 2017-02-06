@@ -1,0 +1,227 @@
+#!/bin/bash
+# script/command to get curl statistics made simple
+# zhe.chen<chenzhe07@gmail.com>
+
+[[ "$TRACE" ]] && set -x
+
+while (( $# > 0 ))
+do
+    case "$1" in
+        -h | --help)
+            perldoc $0
+            exit 1
+            ;;
+        --version)
+            echo "httpstat 0.1.0"
+            exit 0
+            ;;
+        '-w' | '--write-out')
+            continue
+            ;;
+        '-D' | '--dump-header')
+            continue
+            ;;
+        '-o' | '--output')
+            continue
+            ;;
+        '-s' | '--silent')
+            continue
+            ;;
+        -* | --*)
+            args+=( "$1" )
+            ;;
+        *)
+            url="$1"
+            ;;
+    esac
+    shift
+done
+
+if [[ -z $url ]]; then
+    echo "too few arguments" >&2
+    exit 1
+fi
+
+curl_format='{
+"time_namelookup": %{time_namelookup},
+"time_connect": %{time_connect},
+"time_appconnect": %{time_appconnect},
+"time_pretransfer": %{time_pretransfer},
+"time_redirect": %{time_redirect},
+"time_starttransfer": %{time_starttransfer},
+"time_total": %{time_total},
+"speed_download": %{speed_download},
+"speed_upload": %{speed_upload},
+"remote_ip": %{remote_ip},
+"remote_port": %{remote_port}
+}'
+
+head="/tmp/httpstat-header.$$$RANDOM$(date +%s)"
+body="/tmp/httpstat-body.$$$RANDOM$(date +%s)"
+
+data="$(
+LC_ALL=C curl \
+    -w "$curl_format" \
+    -D "$head" \
+    -o "$body" \
+    -s -S \
+    "${args[@]}" \
+    "$url" 2>&1
+)"
+
+get_value() {
+    local d
+    d="$(
+    echo "$data" \
+        | grep "$1" \
+        | awk '{print $2}' \
+        | sed 's/,//g'
+    )"
+    echo $d
+}
+
+get() {
+    local d
+    d=$(get_value $1)
+    echo "$d" | perl -ne 'printf("%d", $_*1000) && last if $_'
+}
+
+calc_sub() {
+    perl -e 'printf("%d", $ARGV[0] - $ARGV[1])' $1 $2
+}
+
+calc_div() {
+    perl -e 'printf("%.1f", $ARGV[0] / $ARGV[1])' $1 $2
+}
+
+time_namelookup="$(get time_namelookup)"
+time_connect="$(get time_connect)"
+time_appconnect="$(get time_appconnect)"
+time_pretransfer="$(get time_pretransfer)"
+time_redirect="$(get time_redirect)"
+time_starttransfer="$(get time_starttransfer)"
+time_total="$(get time_total)"
+speed_download="$(get speed_download)"
+speed_upload="$(get speed_upload)"
+remote_ip="$(get_value remote_ip)"
+remote_port="$(get_value remote_port)"
+
+range_dns="$time_namelookup"
+range_connection="$(calc_sub $time_connect $time_namelookup)"
+range_ssl="$(calc_sub $time_pretransfer $time_connect)"
+range_server="$(calc_sub $time_starttransfer $time_pretransfer)"
+range_transfer="$(calc_sub $time_total $time_starttransfer)"
+
+remote_address="$remote_ip:$remote_port"
+
+fmta() {
+    echo $1 \
+        | awk '{printf("%5dms\n", $1 + 0.5)}'
+}
+
+fmtb() {
+    local d
+    d="$(
+    echo $1 \
+        | awk '{printf("%d\n", $1 + 0.5)}'
+    )"
+    printf "%-7s\n" "${d}ms"
+}
+
+a000="$(fmta $range_dns)"
+a001="$(fmta $range_connection)"
+a002="$(fmta $range_ssl)"
+a003="$(fmta $range_server)"
+a004="$(fmta $range_transfer)"
+b000="$(fmtb $time_namelookup)"
+b001="$(fmtb $time_connect)"
+b002="$(fmtb $time_pretransfer)"
+b003="$(fmtb $time_starttransfer)"
+b004="$(fmtb $time_total)"
+
+https_template="
+  DNS Lookup   TCP Connection   SSL Handshake   Server Processing   Content Transfer
+[   ${a000}  |     ${a001}    |    ${a002}    |      ${a003}      |      ${a004}     ]
+             |                |               |                   |                  |
+    namelookup:${b000}        |               |                   |                  |
+                        connect:${b001}       |                   |                  |
+                                    pretransfer:${b002}           |                  |
+                                                      starttransfer:${b003}          |
+                                                                                 total:${b004}
+"
+
+http_template="
+  DNS Lookup   TCP Connection   Server Processing   Content Transfer
+[   ${a000}  |     ${a001}    |      ${a003}      |      ${a004}     ]
+             |                |                   |                  |
+    namelookup:${b000}        |                   |                  |
+                        connect:${b001}           |                  |
+                                      starttransfer:${b003}          |
+                                                                 total:${b004}
+"
+
+# Print header
+cat "$head"
+
+# Print remote_address
+printf "website ip address: $remote_address\n"
+
+# Print body
+if [[ $HTTPSTAT_SHOW_BODY == true ]]; then
+    cat "$body"; printf '\n'
+else
+    printf "Body stored in: $body\n"
+fi
+
+if [[ $url =~ https:// ]]; then
+    printf "$https_template\n"
+else
+    printf "$http_template\n"
+fi
+
+# speed, originally bytes per second
+if [[ $HTTPSTAT_SHOW_SPEED == true ]]; then
+    printf "speed_download %.1f KiB, speed_upload %.1f KiB\n" \
+        "$(calc_div $speed_download 1024)" \
+        "$(calc_div $speed_upload 1024)"
+fi
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-http-stat - bash script or command to get curl statistics made simple.
+
+=head1 SYNOPSIS
+
+  Usage: sys-http-code URL [CURL_OPTIONS]
+  
+  URL   url to request, could be with or without `http(s)://` prefix
+
+  Options:
+     CURL_OPTIONS  any curl supported options, except for -w -D -o -S -s,
+                   which are already used internally.
+
+     -h --help     show help message
+     --version     show version.
+
+  Environments:
+     HTTPSTAT_SHOW_BODY    By default httpstat will write response body
+                           in a tempfile, but you can let it print out by setting
+                           this variable to `true`.
+     HTTPSTAT_SHOW_SPEED   set to `true` to show download and upload speed.
+  
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-http-stat 0.1.0
+
+=cut
+
+DOCUMENTATION

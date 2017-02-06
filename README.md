@@ -22,6 +22,7 @@ Table of Contents
 * [sys-traffic-capture](#sys-traffic-capture)
 * [sys-diskstats](#sys-diskstats)
 * [sys-http-code](#sys-http-code)
+* [sys-http-stat](#sys-http-stat)
 * [sys-hosts-list](#sys-hosts-list)
 * [sys-dns-response-time](#sys-dns-response-time)
 * [sys-kill-close-wait](#sys-kill-close-wait)
@@ -1038,6 +1039,44 @@ capture when interface em1's in traffic greater than  1000000 bytes
 ```
 $ bash sys-traffic-capture em1 in 1000000
 2016_10_22_11_21_19 [info] capture em1 300000 packets into em1-2016_10_22_11_21_15.pcap
+```
+
+[Back to TOC](#table-of-contents)
+
+sys-http-stat
+=============
+
+`type: shell`
+
+get curl statistics made simple.
+
+fork from https://github.com/b4b4r07/httpstat with no bc command need.
+
+#### Usage:
+get https://highdb.com url statistics
+```
+sys-http-stat https://highdb.com -k
+HTTP/1.1 200 OK
+Server: nginx
+Date: Mon, 06 Feb 2017 10:04:57 GMT
+Content-Type: text/html; charset=UTF-8
+Transfer-Encoding: chunked
+Connection: keep-alive
+Link: <https://highdb.com/wp-json/>; rel="https://api.w.org/"
+
+website ip address: 85.90.244.138:443
+Body stored in: /tmp/httpstat-body.6525266621486375037
+
+  DNS Lookup   TCP Connection   SSL Handshake   Server Processing   Content Transfer
+[       4ms  |       233ms    |      620ms    |       2322ms      |        233ms     ]
+             |                |               |                   |                  |
+    namelookup:4ms            |               |                   |                  |
+                        connect:237ms         |                   |                  |
+                                    pretransfer:857ms             |                  |
+                                                      starttransfer:3179ms           |
+                                                                                 total:3412ms 
+
+speed_download 7440.4 KiB, speed_upload 0.0 KiB
 ```
 
 [Back to TOC](#table-of-contents)

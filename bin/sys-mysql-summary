@@ -469,7 +469,7 @@ use constant Has_Gtid_SQL     => "SELECT \@\@global.gtid_mode As Value";
 use constant Get_ServerID_SQL => "SELECT \@\@global.server_id As Value";
 use constant Get_Version_SQL  => "SELECT VERSION() AS Value";
 use constant Get_metadata_SQL => "SELECT \@\@global.innodb_stats_on_metadata";
-use constant Set_metadata_SQL => "SET innodb_stats_on_metadata = 0";
+use constant Set_metadata_SQL => "SET global innodb_stats_on_metadata = 0";
 use constant Get_Total_Length_SQL => "SELECT SUM(DATA_LENGTH + INDEX_LENGTH) AS Value
 FROM information_schema.tables 
 WHERE TABLE_SCHEMA NOT IN (\"mysql\", \"test\", \"information_schema\", \"performance_schema\")";

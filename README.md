@@ -37,6 +37,7 @@ Table of Contents
 * [sys-mysql-qps](#sys-mysql-qps)
 * [sys-mysql-set-maxconnections](#sys-mysql-set-maxconnections)
 * [sys-mysql-sql-reject](#sys-mysql-sql-reject)
+* [sys-mysql-diff](#sys-mysql-diff)
 * [License](#License)
 
 sys-genpass
@@ -1081,7 +1082,100 @@ speed_download 7440.4 KiB, speed_upload 0.0 KiB
 
 [Back to TOC](#table-of-contents)
 
+sys-mysql-diff
+==============
+
+`type: perl`
+
+compare MySQL database schema and privilege at different time.
+inspired by https://github.com/aspiers/mysqldiff
+
+#### Usage:
+
+#### 1. drop table.
+```
+mysql root@[localhost:s3306 ffm] > drop table table_add;
+Query OK, 0 rows affected (0.02 sec)
+
+```
+#### check with sys-mysql-diff
+```
+# perl sys-mysql-diff -h 127.0.0.1 -P 3306 -u root --askpass -d test
+Enter password : 
+DROP TABLE `table_add`;
+```
+
+#### 2. create table.
+```
+mysql root@[localhost:s3306 ffm] > CREATE TABLE `table_add` (
+   `id` int(10) NOT NULL AUTO_INCREMENT,
+   `name` varchar(20) DEFAULT NULL,
+   `source` tinyint(1) DEFAULT NULL,
+   `create_time` datetime DEFAULT NULL,
+   `type` tinyint(1) NOT NULL DEFAULT '0',
+   PRIMARY KEY (`id`),
+   KEY `idx_cretime` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+Query OK, 0 rows affected (0.02 sec)
+```
+#### check with sys-mysql-diff
+```
+#perl sys-mysql-diff -h 127.0.0.1 -P 3306 -u root --askpass -d test
+Enter password : 
+CREATE TABLE table_add (
+  id int(10) NOT NULL AUTO_INCREMENT,
+  name varchar(20) DEFAULT NULL,
+  source tinyint(1) DEFAULT NULL,
+  create_time datetime DEFAULT NULL,
+  type tinyint(1) NOT NULL DEFAULT '0',
+  PRIMARY KEY (id),
+  KEY idx_cretime (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+```
+
+#### 3. alter table add column and add key.
+```
+mysql root@[localhost:s3306 ffm] > alter table table_add add column descrips varchar(100) not null default '';
+Query OK, 0 rows affected (0.03 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+
+mysql root@[localhost:s3306 ffm] > alter table table_add add key idx_source(`source`);
+Query OK, 0 rows affected (0.01 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+```
+#### check with sys-mysql-diff
+```
+# perl sys-mysql-diff -h 127.0.0.1 -P 3306 -u root --askpass -d test
+Enter password : 
+ALTER TABLE `table_add` ADD COLUMN `descrips` varchar(100) NOT NULL DEFAULT '';
+ALTER TABLE `table_add` ADD INDEX `idx_source` (`source`);
+```
+
+#### 4. alter table drop column and drop key.
+```
+mysql root@[localhost:s3306 ffm] > alter table table_add drop key idx_source;
+Query OK, 0 rows affected (0.01 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+
+mysql root@[localhost:s3306 ffm] > alter table table_add drop column descrips;
+Query OK, 0 rows affected (0.02 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+```
+#### check with sys-mysql-diff
+```
+# perl sys-mysql-diff -h 127.0.0.1 -P 3306 -u root --askpass -d test
+Enter password : 
+ALTER TABLE `table_add` DROP COLUMN `descrips`
+ALTER TABLE `table_add` DROP INDEX `idx_source`;
+```
+
+help message: `perl sys-mysql-diff --help`
+
+[Back to TOC](#table-of-contents)
+
 License
 =======
 
 MIT / BSD
+
+[Back to TOC](#table-of-contents)

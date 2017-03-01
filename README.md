@@ -1171,6 +1171,10 @@ ALTER TABLE `table_add` DROP INDEX `idx_source`;
 
 help message: `perl sys-mysql-diff --help`
 
+#### TODO
+```
+comparing user privileges.
+```
 [Back to TOC](#table-of-contents)
 
 License

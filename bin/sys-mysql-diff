@@ -1,0 +1,1037 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-mysql-diff -- compare MySQL database schema and 
+privilege at different time
+
+=head1 SYNOPSIS
+
+Usage:  [OPTION...]
+
+=head1 RISKS
+
+  The connect user must all database select privileges so 
+  that get table structure info.
+
+=cut
+
+use strict;
+use warnings FATAL => 'all';
+use Carp;
+use Data::Dumper;
+use Getopt::Long qw(:config no_ignore_case);
+use English '-no_match_vars';
+
+my $host     = '127.0.0.1';
+my $port     = 3306;
+my $user     = 'root';
+my $password = '';
+my $askpass  = 0;
+my $database = 'information_schema';
+my $debug    = 0;
+my $tolerant = 0;
+my $help     = 0;
+my $work     = '/tmp/mysqldiff';
+my $charset  = 'utf8';
+
+GetOptions(
+    "host|h=s"     => \$host,
+    "port|P=i"     => \$port,
+    "user|u=s"     => \$user,
+    "password|p=s" => \$password,
+    "askpass!"     => \$askpass,
+    "database|d=s" => \$database,
+    "charset|c=s"  => \$charset,
+    "debug|D!"     => \$debug,
+    "tolerant|t"   => \$tolerant,
+    "work|w=s"     => \$work,
+    "help!"        => \$help,
+) or die "error:$!";
+
+if ($help) {
+    usage($0);
+}
+
+sub usage {
+    my $name = shift;
+    system("perldoc $name");
+    exit 0;
+}
+
+if ($askpass) {
+   $password = noecho_password("Enter password ");
+}
+
+if ( !$password ) {
+    warn "Can not connect to MySQL without password.";
+    usage($0);
+    exit 1;
+}
+
+# Prompt for password when connecting to MySQL
+sub noecho_password {
+    my $prompt = shift;
+    local $OUTPUT_AUTOFLUSH = 1;
+    my $response;
+    eval {
+        #use Term::ReadKey qw(ReadMode ReadKey);
+        require Term::ReadKey;
+        Term::ReadKey->import(qw( ReadMode ReadKey ));
+        if ($OSNAME =~ m/MSWin/) {
+            require Win32::Console::ANSI;
+        }
+        print "$prompt: ";
+        ReadMode('noecho');
+        $response = <STDIN>;
+        chomp($response);
+        ReadMode('normal');
+        print "\n" or die 
+            "Cannot print: $OS_ERROR";
+    };
+    if ($EVAL_ERROR) {
+        die "Cannot read respose; is Term::ReadKey installed? $EVAL_ERROR";
+    }
+    return $response;
+}
+
+# get db handle
+printf( "connect to %s, %d, %s, xxxxxxxx ...\n", $host, $port, $user )
+  if $debug;
+my $dbpre = MySQL::dbh->new(
+    host     => $host,
+    port     => $port,
+    user     => $user,
+    password => $password,
+    charset  => $charset,
+    driver   => 'mysql',
+);
+my $dbh = $dbpre->get_dbh( $database, { AutoCommit => 1 } ) or 
+                             die "Can't get dbh.. $host:$port";
+
+unless (-e $work) {
+    mkdir $work, 0755 or croak "mkdir $work error";
+    print "mkdir $work ok\n" if $debug;
+}
+
+my $dbmfile = "$work" . "/dbm-$host-$port-$database";
+dbmopen my %hash_table_list, $dbmfile, 0644;
+
+my $diff_object = MySQL::Diff->new(dbh => $dbh, debug => $debug,
+                                   database => $database, tolerant => $tolerant);
+my ($changes, $new_db_table_ref) = $diff_object->diff(\%hash_table_list);
+if ($new_db_table_ref) {
+    for my $key (keys %hash_table_list) {
+        delete $hash_table_list{$key};
+    }
+    %hash_table_list = %$new_db_table_ref;
+}
+dbmclose %hash_table_list;
+
+if ($changes) {
+    print $changes;
+}
+else {
+    print "no table change\n";
+}
+
+# ###################################################################
+# Documentation.
+# ###################################################################
+
+=head1 OPTIONS
+
+=over 4
+
+=item host=s | h
+
+MySQL host address, default value is '127.0.0.1'
+
+=item port=i | P
+
+MySQL port number. default value is 3306
+
+=item user=s | u
+
+MySQL username. default value is monitor
+
+=item password=s | p
+
+MySQL user password. no default value.
+
+=item askpass
+
+prompt for password options when connect to MySQL.
+
+=item database=s | D
+
+MySQL database will be used, default is 'information_schema', which means compare all databases.
+
+
+=item charset=s | A
+
+The character used when connect to MySQL, default value is UTF8.
+
+=item debug | d
+
+print debug info.
+
+=item tolerant | t
+
+ignore DEFAULT, AUTO_INCREMENT, COLLATE, and formatting changes, default is false.
+
+=item work | w
+
+the dir that dbm file stored.
+
+=item help
+
+print help info.
+
+=back
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut
+
+package MySQL::dbh;
+
+# Get the database handle which user use, and this database
+# handle object should be destroy when leave MySQL database.
+use strict;
+use warnings FATAL => 'all';
+use constant PTDEBUG => $ENV{PTDEBUG} || 0;
+use English qw(-no_match_vars);
+use DBI;
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+
+use Data::Dumper;
+$Data::Dumper::Indent    = 1;
+$Data::Dumper::Sortkeys  = 1;
+$Data::Dumper::Quotekeys = 0;
+
+require Exporter;
+@ISA     = qw(Exporter);
+@EXPORT  = qw( get_dbh disconnect );
+$VERSION = '0.1.0';
+
+eval { require DBI; };
+
+if ($@) {
+    die "Cannot connect to MySQL because the Perl DBI module is not "
+      . "installed or not found.  Run 'perl -MDBI' to see the directories "
+      . "that Perl searches for DBI.  If DBI is not installed, try:\n"
+      . "  Debian/Ubuntu  apt-get install libdbi-perl\n"
+      . "  RHEL/CentOS    yum install perl-DBI\n"
+      . "  OpenSolaris    pkg install pkg:/SUNWpmdbi\n";
+}
+
+sub host {
+    my $self = shift;
+    $self->{host} = shift if @_;
+    return $self->{host};
+}
+
+sub port {
+    my $self = shift;
+    $self->{port} = shift if @_;
+    return $self->{port};
+}
+
+sub user {
+    my $self = shift;
+    $self->{user} = shift if @_;
+    return $self->{user};
+}
+
+sub password {
+    my $self = shift;
+    $self->{password} = shift if @_;
+    return $self->{password};
+}
+
+sub charset {
+    my $self = shift;
+    $self->{charset} = shift if @_;
+    return $self->{charset};
+}
+
+sub driver {
+    my $self = shift;
+    $self->{driver} = shift if @_;
+    return $self->{driver};
+}
+
+sub new {
+    my ( $class, %args ) = @_;
+    my @required_args = qw(host port user password);
+    PTDEBUG && print Dumper(%args);
+
+    foreach my $arg (@required_args) {
+        warn "I need a $arg argument" unless $args{$arg};
+    }
+
+    my $self = {};
+    bless $self, $class;
+
+    # options should be used.
+    $self->host( $args{'host'}         || 127.0.0.1 );
+    $self->port( $args{'port'}         || 3306 );
+    $self->user( $args{'user'}         || 'audit' );
+    $self->password( $args{'password'} || '' );
+    $self->charset( $args{'charset'}   || 'utf8' );
+    $self->driver( $args{'driver'}     || 'mysql' );
+
+    return $self;
+}
+
+sub get_dbh {
+    my ( $self, $database, $opts ) = @_;
+    $opts ||= {};
+    my $host     = $self->{host};
+    my $port     = $self->{port};
+    my $user     = $self->{user};
+    my $password = $self->{password};
+    my $charset  = $self->{charset};
+    my $driver   = $self->{driver};
+
+    my $defaults = {
+        AutoCommit         => 0,
+        RaiseError         => 1,
+        PrintError         => 0,
+        ShowErrorStatement => 1,
+        mysql_enable_utf8  => ( $charset =~ m/utf8/i ? 1 : 0 ),
+    };
+    @{$defaults}{ keys %$opts } = values %$opts;
+
+    #if ( $opts->{mysql_use_result} ) {
+    #    $defaults->{mysql_use_result} = 1;
+    #}
+
+    my $dbh;
+    my $tries = 2;
+    while ( !$dbh && $tries-- ) {
+        PTDEBUG
+          && print Dumper(
+            join( ', ', map { "$_=>$defaults->{$_}" } keys %$defaults ) );
+        $dbh = eval {
+            DBI->connect(
+                "DBI:$driver:database=$database;host=$host;port=$port",
+                $user, $password, $defaults );
+        };
+
+        if ( !$dbh && $@ ) {
+            if ( $@ =~ m/locate DBD\/mysql/i ) {
+                warn
+                    "Cannot connect to MySQL because the Perl DBD::mysql module is "
+                  . "not installed or not found.  Run 'perl -MDBD::mysql' to see "
+                  . "the directories that Perl searches for DBD::mysql.  If "
+                  . "DBD::mysql is not installed, try:\n"
+                  . "  Debian/Ubuntu  apt-get install libdbd-mysql-perl\n"
+                  . "  RHEL/CentOS    yum install perl-DBD-MySQL\n"
+                  . "  OpenSolaris    pgk install pkg:/SUNWapu13dbd-mysql\n";
+            }
+            elsif ( $@ =~ m/not a compiled character set|character set utf8/i )
+            {
+                PTDEBUG && print 'Going to try again without utf8 support\n';
+                delete $defaults->{mysql_enable_utf8};
+            }
+            if ( !$tries ) {
+                warn "$@";
+                return;
+            }
+
+        }
+    }
+
+    if ( $driver =~ m/mysql/i ) {
+        my $sql;
+        $sql = 'SELECT @@SQL_MODE';
+        PTDEBUG && print "+-- $sql\n";
+
+        my ($sql_mode) = eval { $dbh->selectrow_array($sql) };
+        warn "Error getting the current SQL_MORE: $@" if $@;
+
+        if ($charset) {
+            $sql = qq{/*!40101 SET NAMES "$charset"*/};
+            PTDEBUG && print "+-- $sql\n";
+            eval { $dbh->do($sql) };
+            warn "Error setting NAMES to $charset: $@" if $@;
+            PTDEBUG && print "Enabling charset to STDOUT\n";
+            if ( $charset eq 'utf8' ) {
+                binmode( STDOUT, ':utf8' )
+                  or warn "Can't binmode(STDOUT, ':utf8'): $!\n";
+            }
+            else {
+                binmode(STDOUT) or warn "Can't binmode(STDOUT): $!\n";
+            }
+        }
+
+        $sql =
+            'SET @@SQL_QUOTE_SHOW_CREATE = 1'
+            . '/*!40101, @@SQL_MODE=\'NO_AUTO_VALUE_ON_ZERO'
+            . ( $sql_mode ? ",$sql_mode" : '' ) . '\'*/';
+        PTDEBUG && print "+-- $sql\n";
+        eval { $dbh->do($sql) };
+        warn "Error setting SQL_QUOTE_SHOW_CREATE, SQL_MODE"
+             . ( $sql_mode ? " and $sql_mode" : '' ) . ": $@"
+           if $@;
+    }
+
+    if (PTDEBUG) {
+        print Dumper(
+            $dbh->selectrow_hashref(
+                'SELECT DATABASE(), CONNECTION_ID(), VERSION()/*!50038, @@hostname*/'
+            )
+        );
+        print "+-- 'Connection info:', $dbh->{mysql_hostinfo}\n";
+        print Dumper(
+            $dbh->selectall_arrayref(
+                "SHOW VARIABLES LIKE 'character_set%'",
+                { Slice => {} }
+            )
+        );
+        print '+-- $DBD::mysql::VERSION:' . "$DBD::mysql::VERSION\n";
+        print '+-- $DBI::VERSION:' . "$DBI::VERSION\n";
+    }
+    return $dbh;
+}
+
+# handle should be destroy.
+sub disconnect {
+    my ( $self, $dbh ) = @_;
+    PTDEBUG && $self->print_active_handles( $self->get_dbh );
+    $dbh->disconnect;
+}
+
+sub print_active_handles {
+    my ( $self, $thing, $level ) = @_;
+    $level ||= 0;
+    printf(
+        "# Active %sh: %s %s %s\n",
+        ( $thing->{Type} || 'undef' ),
+        "\t" x $level,
+        $thing,
+        ( ( $thing->{Type} || '' ) eq 'st' ? $thing->{Statement} || '' : '' )
+    ) or warn "Cannot print: $OS_ERROR";
+    foreach my $handle ( grep { defined } @{ $thing->{ChildHandles} } ) {
+        $self->print_active_handles( $handle, $level + 1 );
+    }
+}
+
+1;
+
+package MySQL::Table;
+use strict;
+use warnings FATAL => 'all';
+use English qw(-no_match_vars);
+use Carp qw(croak);
+use Data::Dumper;
+
+sub new {
+    my ( $class, %args ) = @_;
+    my @required_args = qw(def);
+    foreach my $arg (@required_args) {
+        die "I need a $arg argument" unless $args{$arg};
+    }
+    my $self = {
+        def    => undef,
+    };
+    bless $self, $class;
+    $self->{def}  = $args{'def'};
+    $self->{debug} = $args{'debug'};
+    $self->_parse();
+    return $self;
+}
+
+sub table_def {
+    my $self = shift;
+    return $self->{table_def};
+}
+
+sub table_name {
+    my $self = shift;
+    return $self->{table_name};
+}
+
+sub table_field {
+    my $self = shift;
+    return $self->{table_fields}{$_[0]};
+}
+
+sub table_fields {
+    my $self = shift;
+    return $self->{table_fields};
+}
+
+sub table_primary_key {
+    my $self = shift;
+    return $self->{table_primary_key};
+}
+
+sub table_indices {
+    my $self = shift;
+    return $self->{table_indices};
+}
+
+sub table_options {
+    my $self = shift;
+    return $self->{table_options};
+}
+
+sub table_foreign_key {
+    my $self = shift;
+    return $self->{table_foreign_key};
+}
+
+sub is_field {
+    my $self = shift;
+    return $_[0] && $self->{table_fields}{$_[0]} ? 1 : 0;
+}
+
+sub is_primary {
+    my $self = shift;
+    return $_[0] && $self->{table_primary}{$_[0]} ? 1 : 0;
+}
+
+sub is_index {
+    my $self = shift;
+    return $_[0] && $self->{table_indices}{$_[0]} ? 1 : 0;
+}
+
+sub is_unique {
+    my $self = shift;
+    return $_[0] && $self->{table_unique}{$_[0]} ? 1 : 0;
+}
+
+sub is_fulltext {
+    my $self = shift;
+    return $_[0] && $self->{table_fulltext}{$_[0]} ? 1 : 0;
+}
+
+sub is_auto_inc {
+    my $self = shift;
+    return $_[0] && $self->{table_auto_inc}{$_[0]} ? 1 : 0;
+}
+
+sub _parse {
+    my $self = shift;
+
+    $self->{table_def} = $self->{def};
+    $self->{table_def} =~ s/`([^`]+)`/$1/gs;
+    $self->{table_def} =~ s/\n+/\n/;
+    $self->{lines} = [ grep ! /^\s*$/, split /(?=^)/m, $self->{def} ];
+
+    if ($self->{debug}) {
+        print "parsing table def: '$self->{table_def}'\n";
+    }
+    my @lines = @{$self->{lines}};
+    @lines = grep ! m{^/\*!40\d{3} .*? \*/;}, @lines;
+    @lines = grep ! m{^(SET |DROP TABLE)}, @lines;
+
+    if ($lines[0] =~ /^\s*create\s+table\s+(\S+)\s+\(\s*$/i) {
+        $self->{table_name} = $1;
+        shift @lines;
+    }
+    else {
+        croak "couln't figure out table name";
+    }
+
+    while (@lines) {
+        $_ = shift @lines;
+        s/^\s*(.*?),?\s*$/$1/; # trim whitespace and trailing commas
+        if (/^PRIMARY\s+KEY\s+(.+)$/) {
+            my $primary = $1;
+            if ($self->{table_primary_key}) {
+                croak "two primary keys in table " . 
+                      "'$self->{table_name}': '$primary', '$self->{table_primary_key}'\n";
+            }
+            $self->{table_primary_key} = $primary;
+            $primary =~ s/\((.*?)\)/$1/;
+            $self->{table_primary}{$_} = 1 for (split(/,/, $primary));
+            next;
+        }
+
+        if (/^(?:CONSTRAINT\s+(.*)?)?\s+FOREIGN\s+KEY\s+(.*)$/) {
+            my ($key, $val) = ($1, $2);
+            if ($self->{table_foreign_key}{$key}) {
+                croak "foreign key '$key' duplicated in table '$self->{table_name}'\n";
+            }
+            $self->{table_foreign_key}{$key} = $val;
+            next;
+        }
+
+        if (/^(KEY|UNIQUE(?: KEY)?)\s+(\S+?)(?:\s+USING\s+(?:BTREE|HASH|RTREE))?
+            \s*\((.*)\)(?:\s+USING\s+(?:BTREE|HASH|RTREE))?$/x) {
+            my ($type, $key, $val) = ($1, $2, $3);
+            if ($self->{table_indices}{$key}) {
+                croak "index '$key' duplicated in table '$self->{table_name}'\n";
+            }
+            $self->{table_indices}{$key} = $val;
+            $self->{table_unique}{$key} = 1 if $type =~ /unique/i;
+            next;
+        }
+
+        if (/^(FULLTEXT(?:\s+KEY|INDEX)?)\s+(\S+?)\s*\((.*)\)$/) {
+            my ($type, $key, $val) = ($1, $2, $3);
+            if ($self->{table_fulltext}{$key}) {
+                croak "FULLTEXT index '$key' duplicated in table '$self->{table_name}'"
+            }
+            $self->{table_indices}{$key} = $val;
+            $self->{table_fulltext}{$key} = 1;
+            next;
+        }
+
+        if (/^\)\s*(.*?)$/) { # end of table definition
+            $self->{table_options} = $1;
+            last;
+        }
+
+        if (/^(\S+)\s*(.*)/) {
+            my($field, $fdef) = ($1, $2);
+            if ($self->{table_fields}{field}) {
+                croak "definition for field '$field' duplicated in "
+                      . "table '$self->{table_name}'";
+            }
+            $self->{table_fields}{$field} = $fdef;
+            next unless $fdef =~ /\s+AUTO_INCREMENT\b/;
+            $self->{table_auto_inc}{$field} = 1;
+            next;
+        }
+
+        croak "unparsable line in definition for table $self->{table_name}:\n$_";
+    }
+    warn "table '$self->{table_name}' didn't have terminator\n"
+        unless defined $self->{table_options};
+    warn "table '$self->{table_name}' had trailing garbage:\n", join '', @lines
+        if @lines;
+
+    if ($self->{debug}) {
+        printf Dumper($self);
+    }
+}
+
+# schema diff compare
+package MySQL::Diff;
+use strict;
+use warnings FATAL => 'all';
+use English qw(-no_match_vars);
+use Carp qw(croak);
+use Data::Dumper;
+
+#general sql list
+use constant Get_One_Database_Tables   => "SELECT TABLE_SCHEMA, TABLE_NAME
+FROM information_schema.tables WHERE TABLE_SCHEMA = ?";
+
+use constant Get_All_Database_Tables   => "SELECT TABLE_SCHEMA, TABLE_NAME
+FROM information_schema.tables WHERE TABLE_SCHEMA NOT IN 
+(\"mysql\", \"test\", \"information_schema\", \"performance_schema\")";
+
+sub new {
+    my ( $class, %args ) = @_;
+    my @required_args = qw(dbh database);
+    foreach my $arg (@required_args) {
+        die "I need a $arg argument" unless $args{$arg};
+    }
+    my $self = {
+        dbh           => undef,
+        debug         => undef,
+        database      => undef,
+        tolerant      => undef,
+    };
+    bless $self, $class;
+    $self->{dbh}        = $args{'dbh'};
+    $self->{debug}      = $args{'debug'};
+    $self->{database}   = $args{'database'};
+    $self->{tolerant}   = $args{'tolerant'};
+    return $self;
+}
+
+sub get_variable {
+    my $self  = shift;
+    my $query = shift;
+    my $sth   = $self->{dbh}->prepare($query);
+    $sth->execute();
+    my $href = $sth->fetchrow_hashref;
+    return $href->{Value};
+}
+
+sub set_variable {
+    my $self  = shift;
+    my $query = shift;
+    eval {
+        $self->{dbh}->do($query);
+    };
+    if($@) {
+        return 0;
+    }
+    else {
+        return 1;
+    }
+}
+
+sub _debug_message {
+    my $self = shift;
+    my $message = shift;
+    if ($self->{debug}) {
+        print "$message\n";
+    }
+}
+
+sub _get_table_structure {
+    my $self = shift;
+    my $database = shift;
+    my $table = shift;
+    my $query = sprintf("SHOW CREATE TABLE %s\.%s", $database, $table);
+    my $sth = $self->{dbh}->prepare($query);
+    $sth->execute();
+    my $href = $sth->fetchrow_hashref;
+    return $href->{'Create Table'};
+}
+
+sub _get_tables_ref {
+    my $self = shift;
+    if ($self->get_variable("SELECT \@\@global.innodb_stats_on_metadata As Value")) {
+        if ($self->set_variable("SET GLOBAL innodb_stats_on_metadata = 0")) {
+            $self->_debug_message("execute query: 'set global innodb_stats_on_metadata = 0'");
+        }
+    }
+    my %db_table;
+    my $sth = do {
+        if ($self->{database} =~ /\binformation_schema\b/i) {
+            $self->{dbh}->selectall_arrayref(Get_All_Database_Tables, undef);
+        }
+        else {
+            $self->{dbh}->selectall_arrayref(Get_One_Database_Tables,
+                                            undef, $self->{database});
+        }
+    };
+    for my $list (@$sth) {
+        my ($db, $table) = @$list;
+        $db_table{"$db:$table"} = $self->_get_table_structure($db, $table);
+    }
+    return \%db_table;
+}
+
+sub register_table {
+    my($self, $table) = @_;
+    return MySQL::Table->new(def=> $table, debug => $self->{debug});
+}
+
+sub diff {
+    my $self = shift;
+    my $old_table_ref = shift; # key --> db:table
+    my @changes;
+    my $database = $self->{database};
+    $self->_debug_message("comaring database '$database'");
+    my $new_db_table = $self->_get_tables_ref();
+
+    for my $key (keys %$old_table_ref) {
+        my $table_old = $self->register_table($old_table_ref->{$key});
+        my $name = $table_old->table_name();
+        $self->_debug_message("looking at tables called '$name'");
+        if (exists $new_db_table->{$key}) {
+            $self->_debug_message("comparing tables called '$name'");
+            my $table_new = $self->register_table($new_db_table->{$key});
+            push @changes, $self->_diff_tables($table_old, $table_new);
+        }
+        else {
+            $self->_debug_message("table '$name' dropped");
+            push @changes, "DROP TABLE $name;\n";
+        }
+    }
+
+    for my $list (keys %$new_db_table) {
+        my $table_new = $self->register_table($new_db_table->{$list});
+        my $name = $table_new->table_name();
+        if (! $old_table_ref->{$list}) {
+            $self->_debug_message(sprintf("table '$name' added:\n%s", $table_new->table_def));
+            push @changes, $table_new->table_def . "\n";
+        }
+    }
+
+    my $out = '';
+    if (@changes) {
+        $out = join '', @changes;
+    }
+    return ($out, $new_db_table);
+}
+
+
+sub _diff_tables {
+    my $self = shift;
+    my @changes = (
+        $self->_diff_fields(@_),
+        $self->_diff_indices(@_),
+        $self->_diff_primary_key(@_),
+        $self->_diff_foreign_key(@_),
+        $self->_diff_options(@_),
+    );
+
+    $changes[-1] =~ s/\n*$/\n/ if (@changes);
+    return @changes;
+}
+
+sub _diff_fields {
+    my ($self, $table1, $table2) = @_;
+    my $name1 = $table1->table_name();
+    my $fields1 = $table1->table_fields();
+    my $fields2 = $table2->table_fields();
+
+    return () unless $fields1 || $fields2;
+    my @changes;
+
+    if ($fields1) {
+        for my $field (keys %$fields1) {
+            my $f1 = $fields1->{$field};
+            my $f2 = $fields2->{$field};
+            if ($fields2 && $f2) {
+                if ($self->{tolerant}) {
+                    for ($f1, $f2) {
+                        s/ COLLATE [\w_]+//gi;
+                    }
+                }
+                if ($f1 ne $f2) {
+                    if (not $self->{tolerant} or (($f1 !~ m/$2\(\d+,\d+\)/) and
+                         ($f1 ne "$f2 DEFAULT '' NOT NULL") and
+                         ($f1 ne "$f2 NOT NULL") ))
+                    {
+                        $self->_debug_message("field '$field' changed in table: '$name1'");
+                        my $change = "ALTER TABLE $name1 CHANGE COLUMN " 
+                                   . "$field $field $f2;";
+                        $change .= "\n";
+                        push @changes, $change;
+                    }
+                }
+            }
+            else {
+                $self->_debug_message("field '$field' removed");
+                my $change = "ALTER TABLE $name1 DROP COLUMN $field";
+                $change .= "\n";
+                push @changes, $change;
+            }
+        }
+    }
+
+    if ($fields2) {
+        for my $field (keys %$fields2) {
+            unless($fields1 && $fields1->{$field}) {
+                $self->_debug_message("field '$field' added");
+                my $changes = "ALTER TABLE $name1 ADD COLUMN $field $fields2->{$field}";
+                if ($table2->is_auto_inc($field)) {
+                    if ($table2->is_primary($field)) {
+                        $changes .= " PRIMARY KEY";
+                    }
+                    elsif ($table2->is_unique($field)) {
+                        $changes .= " UNIQUE KEY";
+                    }
+                }
+                push @changes, "$changes;\n";
+            }
+        }
+    }
+
+    return @changes;
+}
+
+sub _diff_indices {
+    my($self, $table1, $table2) = @_;
+    my $name1 = $table1->table_name();
+    my $indices1 = $table1->table_indices();
+    my $indices2 = $table2->table_indices();
+
+    return () unless $indices1 || $indices2;
+
+    my @changes;
+    if ($indices1) {
+        for my $index (keys %$indices1) {
+            $self->_debug_message("table1 had index '$index'");
+            my $old_type = $table1->is_unique($index) 
+                         ? 'UNIQUE'
+                         : $table1->is_fulltext($index)
+                         ? 'FULLTEXT INDEX'
+                         : 'INDEX';
+            if ($indices2 && $indices2->{$index}) {
+                if ( ($indices1->{$index} ne $indices2->{$index}) or 
+                     ($table1->is_unique($index) xor $table2->is_unique($index)) or
+                     ($table1->is_fulltext($index) xor $table2->is_fulltext($index)) )
+                {
+                   $self-> _debug_message("index '$index' changed");
+                    my $new_type = $table2->is_unique($index) 
+                                 ? 'UNIQUE'
+                                 : $table2->is_fulltext($index)
+                                 ? 'FULLTEXT INDEX'
+                                 : 'INDEX';
+                    my $changes = "ALTER TABLE $name1 DROP INDEX $index;";
+                    $changes .= "\nALTER TABLE $name1 ADD $new_type $index ($indices2->{$index});\n";
+                    push @changes, $changes;
+                }
+            }
+            else {
+                $self->_debug_message("index '$index' removed");
+                my $auto = _check_for_auto_col($table2, $indices1->{$index}, 1) || '';
+                my $changes = $auto ? _index_auto_col($table1, $indices1->{$index}) : '';
+                $changes = "ALTER TABLE $name1 DROP INDEX $index;";
+                $changes .= "\n";
+                push @changes, $changes;
+            }
+        }
+    }
+
+    if ($indices2) {
+        for my $index (keys %$indices2) {
+            next if ($indices1 && $indices1->{$index});
+            next if (
+                !$table2->is_primary($index)
+                && $table2->is_unique($index)
+                && _key_covers_auto_col($table2, $index)
+            );
+            $self->_debug_message("index '$index' added");
+            my $new_type = $table2->is_unique($index) ? 'UNIQUE' : 'INDEX';
+            push @changes, "ALTER TABLE $name1 ADD $new_type $index ($indices2->{$index});\n";
+        }
+    }
+    return @changes;
+}
+
+sub _fields_from_key {
+    my $key = shift;
+    $key =~ s/^\s*\((.*)\)\s*$/$1/g; # strip brackets if any
+    split /\s*,\s*/, $key;
+}
+
+sub _check_for_auto_col {
+    my ($table, $fields, $primary) = @_;
+    my @fields = _fields_from_key($fields);
+    for my $field (@fields) {
+        next if ($table->table_field($field) !~ /auto_increment/i);
+        next if ($table->is_index($field));
+        next if ($primary && $table->is_primary($field));
+
+        return $field;
+    }
+    return;
+}
+
+sub _key_covers_auto_col {
+    my ($table, $key) = @_;
+    my @fields = _fields_from_key($key);
+    for my $field (@fields) {
+        return 1 if $table->is_auto_inc($field);
+    }
+    return;
+}
+
+sub _index_auto_col {
+    my ($table, $field) = @_;
+    my $name = $table->table_name();
+    return 
+        "ALTER TABLE $name ADD INDEX ($field); #auto columns must always be indexed\n";
+}
+
+sub _diff_primary_key {
+    my ($self, $table1, $table2) = @_;
+    my $name1 = $table1->table_name();
+
+    my $primary1 = $table1->table_primary_key();
+    my $primary2 = $table2->table_primary_key();
+
+    return () unless $primary1 || $primary2;
+
+    my @changes;
+    if ($primary1 && ! $primary2) {
+        $self->_debug_message("primary key '$primary1' dropped");
+        my $changes .= _index_auto_col($table2, $primary1);
+        $changes = "ALTER TABLE $name1 DROP PRIMARY KEY;\n";
+        push @changes, $changes;
+    }
+
+    if (! $primary1 && $primary2) {
+        $self->_debug_message("primary key '$primary2' added");
+        return () if _key_covers_auto_col($table2, $primary2);
+        push @changes, "ALTER TABLE $name1 ADD PRIMARY KEY $primary2;\n";
+    }
+
+    if ($primary1 ne $primary2) {
+        $self->_debug_message("primary key changed");
+        my $auto = _check_for_auto_col($table2, $primary1) || '';
+        my $changes = $auto ? _index_auto_col($table2, $auto) : '';
+        $changes .= "ALTER TABLE $name1 DROP PRIMARY KEY;";
+        $changes .= "\nALTER TABLE $name1 ADD PRIMARY KEY $primary2;\n";
+        $changes .= "ALTER TABLE $name1 DROP INDEX $auto;\n" if ($auto);
+        push @changes, $changes;
+    }
+
+    return @changes;
+}
+
+sub _diff_foreign_key {
+    my ($self, $table1, $table2) = @_;
+
+    my $name1 = $table1->table_name();
+    my $fks1 = $table1->table_foreign_key();
+    my $fks2 = $table2->table_foreign_key();
+
+    return () unless $fks1 || $fks2;
+
+    my @changes;
+    if ($fks1) {
+        for my $fk (keys %$fks1) {
+            $self->_debug_message("$name1 has fk '$fk'");
+            if ($fks2 && $fks2->{$fk}) {
+                if ($fks1->{$fk} ne $fks2->{$fk} ) {
+                    $self->_debug_message("foreign key '$fk' changed");
+                    my $changes = "ALTER TABLE $name1 DROP FOREIGN KEY $fk;";
+                    $changes .= "\nALTER TABLE $name1 ADD CONSTRAINT $fk FOREIGN KEY $fks2->{$fk};\n";
+                    push @changes, $changes;
+                }
+            }
+            else {
+                $self->_debug_message("foreign key '$fk' removed");
+                my $changes = "ALTER TABLE $name1 DROP FOREIGN KEY $fk;";
+                $changes .= "\n";
+                push @changes, $changes;
+            }
+        }
+    }
+
+    if($fks2) {
+        for my $fk (keys %$fks2) {
+            next if ($fks1 && $fks1->{$fk});
+            $self->_debug_message("foreign key '$fk' added");
+            push @changes, "ALTER TABLE $name1 ADD CONSTRAINT $fk FOREIGN KEY $fks2->{$fk};\n";
+        }
+    }
+    return @changes;
+}
+
+sub _diff_options {
+    my ($self, $table1, $table2) = @_;
+    my $name = $table1->table_name();
+    my $options1 = $table1->table_options();
+    my $options2 = $table2->table_options();
+
+    return () unless $options1 || $options2;
+
+    my @changes;
+    if ($self->{tolerant}) {
+        for ($options1, $options2) {
+            s/ AUTO_INCREMENT=\d+//gi;
+            s/ COLLATE=[\w_]+//gi;
+        }
+    }
+    if ($options1 ne $options2) {
+        my $change = "ALTER TABLE $name $options2;";
+        $change .= "\n";
+        push @changes, $change;
+    }
+    return @changes;
+}
+
+1;

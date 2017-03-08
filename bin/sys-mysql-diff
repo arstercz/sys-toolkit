@@ -114,12 +114,16 @@ unless (-e $work) {
     print "mkdir $work ok\n" if $debug;
 }
 
-my $dbmfile = "$work" . "/dbm-$host-$port-$database";
-dbmopen my %hash_table_list, $dbmfile, 0644;
-
 my $diff_object = MySQL::Diff->new(dbh => $dbh, debug => $debug,
                                    database => $database, tolerant => $tolerant);
-my ($changes, $new_db_table_ref) = $diff_object->diff(\%hash_table_list);
+my @diffs;
+
+# table schema diff
+my $dbm_schema = "$work" . "/dbm-$host-$port-$database";
+dbmopen my %hash_table_list, $dbm_schema, 0644
+            or die "open $dbm_schema error: $!";
+
+my ($schema_changes, $new_db_table_ref) = $diff_object->schema_diff(\%hash_table_list);
 if ($new_db_table_ref) {
     for my $key (keys %hash_table_list) {
         delete $hash_table_list{$key};
@@ -128,11 +132,35 @@ if ($new_db_table_ref) {
 }
 dbmclose %hash_table_list;
 
-if ($changes) {
-    print $changes;
+push @diffs, $schema_changes;
+
+# global variables diff
+my $dbm_vars = "$work" . "/dbm-$host-$port-variables";
+dbmopen my %hash_vars_list, $dbm_vars, 0644
+            or die "open $dbm_vars error: $!";
+
+my ($vars_changes, $new_db_vars_ref) = $diff_object->variables_diff(\%hash_vars_list);
+if ($new_db_vars_ref) {
+    %hash_vars_list = %$new_db_vars_ref;
 }
-else {
-    print "no table change\n";
+dbmclose %hash_vars_list;
+
+push @diffs, $vars_changes;
+
+## user privileges diff
+#my $dbm_priv = "$work" . "/dbm-$host-$port-privileges";
+#dbmopen my %hash_priv_list, $dbm_priv, 0644
+#            or die "open $dbm_priv error: $!";
+#my ($changes, $new_db_priv_ref) = $diff_object->privileges_diff(\%hash_priv_list);
+#if($new_db_priv_ref) {
+#    %hash_priv_ref = %$new_db_priv_ref;
+#}
+#dbmclose %hash_priv_ref;
+#push @diffs, $changes;
+
+# print diff
+foreach my $key (@diffs) {
+    print "$key\n" if $key;
 }
 
 # ###################################################################
@@ -719,12 +747,49 @@ sub _get_tables_ref {
     return \%db_table;
 }
 
+sub _get_global_variables_ref {
+    my $self = shift;
+    my $sth_variables = $self->{dbh}->selectall_arrayref("SHOW GLOBAL VARIABLES")
+                            or warn $self->{dbh}->errstr;
+    my %global_variables;
+    foreach my $list (@$sth_variables) {
+        my ($key, $value) = @$list;
+        $value ||= '';
+        $global_variables{$key} = $value . ''; # ensure string value
+    }
+    return \%global_variables;
+}
+
 sub register_table {
     my($self, $table) = @_;
     return MySQL::Table->new(def=> $table, debug => $self->{debug});
 }
 
-sub diff {
+sub variables_diff {
+    my $self = shift;
+    my $old_variables_ref = shift; # Variable_name -> Value
+    my @changes;
+    
+    my $new_variables_ref = $self->_get_global_variables_ref();
+    for my $key (keys %$new_variables_ref) {
+        $self->_debug_message("comparing variables...$key");
+        if ($old_variables_ref->{$key}) {
+            if($old_variables_ref->{$key} ne $new_variables_ref->{$key}) {
+               push @changes, "SET GLOBAL $key = $new_variables_ref->{$key};\n";
+            }
+        } else {
+            #initianal get keys
+            $self->_debug_message("add variables $key ...");
+        }
+    }
+    my $out = '';
+    if (@changes) {
+        $out = join '', @changes;
+    }
+    return ($out, $new_variables_ref);
+}
+
+sub schema_diff {
     my $self = shift;
     my $old_table_ref = shift; # key --> db:table
     my @changes;
@@ -798,7 +863,7 @@ sub _diff_fields {
                     }
                 }
                 if ($f1 ne $f2) {
-                    if (not $self->{tolerant} or (($f1 !~ m/$2\(\d+,\d+\)/) and
+                    if (not $self->{tolerant} or (($f1 !~ m/$f2\(\d+,\d+\)/) and
                          ($f1 ne "$f2 DEFAULT '' NOT NULL") and
                          ($f1 ne "$f2 NOT NULL") ))
                     {
@@ -812,7 +877,7 @@ sub _diff_fields {
             }
             else {
                 $self->_debug_message("field '$field' removed");
-                my $change = "ALTER TABLE $name1 DROP COLUMN $field";
+                my $change = "ALTER TABLE $name1 DROP COLUMN $field;";
                 $change .= "\n";
                 push @changes, $change;
             }
@@ -823,7 +888,7 @@ sub _diff_fields {
         for my $field (keys %$fields2) {
             unless($fields1 && $fields1->{$field}) {
                 $self->_debug_message("field '$field' added");
-                my $changes = "ALTER TABLE $name1 ADD COLUMN $field $fields2->{$field}";
+                my $changes = "ALTER TABLE $name1 ADD COLUMN $field $fields2->{$field};";
                 if ($table2->is_auto_inc($field)) {
                     if ($table2->is_primary($field)) {
                         $changes .= " PRIMARY KEY";

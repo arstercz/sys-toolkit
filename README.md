@@ -1165,16 +1165,46 @@ Records: 0  Duplicates: 0  Warnings: 0
 ```
 # perl sys-mysql-diff -h 127.0.0.1 -P 3306 -u root --askpass -d test
 Enter password : 
-ALTER TABLE `table_add` DROP COLUMN `descrips`
+ALTER TABLE `table_add` DROP COLUMN `descrips`;
 ALTER TABLE `table_add` DROP INDEX `idx_source`;
+```
+
+#### 5. alter variables and user privileges.
+```
+mysql root@[localhost:s3301 test] > set global wait_timeout = 1000;
+Query OK, 0 rows affected (0.00 sec)
+mysql root@[localhost:s3301 test] > revoke all on test.* from user_test@`10.3.254.%`;
+Query OK, 0 rows affected (0.00 sec)
+```
+
+#### check with sys-mysql-diff with -r option
+```
+# perl sys-mysql-diff -h 127.0.0.1 -P 3301 -u root --askpass -d test -t -r
+Enter password :
+SET GLOBAL wait_timeout = 1000;
+REVOKE ALL PRIVILEGES ON test.* FROM 'user_test'@'10.0.21.%';
+```
+
+#### 6. change user password and privileges with -r option
+```
+mysql root@[localhost:s3301 test] > set password for user_test@`10.0.21.%` = password('xxxxxx');
+Query OK, 0 rows affected (0.00 sec)
+
+mysql root@[localhost:s3301 test] > revoke select on test.* from user_test@`10.0.21.%`;
+Query OK, 0 rows affected (0.00 sec)
+
+```
+
+#### check with sys-mysql-diff
+```
+# perl sys-mysql-diff -h 127.0.0.1 -P 3301 -u root --askpass -d test -t -r
+Enter password : 
+SET PASSWORD FOR 'user_test'@'10.0.21.%' = '*4661D72F443CFC758BECA246B5FA89525BF23E91';
+REVOKE SELECT ON test.* FROM 'user_test'@'10.0.21.%';
 ```
 
 help message: `perl sys-mysql-diff --help`
 
-#### TODO
-```
-comparing user privileges.
-```
 [Back to TOC](#table-of-contents)
 
 License

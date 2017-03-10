@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-sys-mysql-diff -- compare MySQL database schema and 
+sys-mysql-diff -- compare MySQL database schema, variables and 
 privilege at different time
 
 =head1 SYNOPSIS
@@ -13,6 +13,11 @@ Usage:  [OPTION...]
 
   The connect user must all database select privileges so 
   that get table structure info.
+
+  default also to diff global variables.
+
+  Connect user also need have grant option so that can get
+  all user privileges when you want to diff user privileges;
 
 =cut
 
@@ -34,6 +39,7 @@ my $tolerant = 0;
 my $help     = 0;
 my $work     = '/tmp/mysqldiff';
 my $charset  = 'utf8';
+my $privileges = 0;
 
 GetOptions(
     "host|h=s"     => \$host,
@@ -47,6 +53,7 @@ GetOptions(
     "tolerant|t"   => \$tolerant,
     "work|w=s"     => \$work,
     "help!"        => \$help,
+    "privielges|r!"=> \$privileges,
 ) or die "error:$!";
 
 if ($help) {
@@ -147,20 +154,22 @@ dbmclose %hash_vars_list;
 
 push @diffs, $vars_changes;
 
-## user privileges diff
-#my $dbm_priv = "$work" . "/dbm-$host-$port-privileges";
-#dbmopen my %hash_priv_list, $dbm_priv, 0644
-#            or die "open $dbm_priv error: $!";
-#my ($changes, $new_db_priv_ref) = $diff_object->privileges_diff(\%hash_priv_list);
-#if($new_db_priv_ref) {
-#    %hash_priv_ref = %$new_db_priv_ref;
-#}
-#dbmclose %hash_priv_ref;
-#push @diffs, $changes;
+# user privileges diff
+if($privileges) {
+    my $dbm_priv = "$work" . "/dbm-$host-$port-privileges";
+    dbmopen my %hash_priv_list, $dbm_priv, 0644
+                or die "open $dbm_priv error: $!";
+    my ($changes, $new_db_priv_ref) = $diff_object->privileges_diff(\%hash_priv_list);
+    if($new_db_priv_ref) {
+        %hash_priv_list = %$new_db_priv_ref;
+    }
+    dbmclose %hash_priv_list;
+    push @diffs, $changes;
+}
 
 # print diff
 foreach my $key (@diffs) {
-    print "$key\n" if $key;
+    print "$key" if $key;
 }
 
 # ###################################################################
@@ -215,6 +224,10 @@ the dir that dbm file stored.
 =item help
 
 print help info.
+
+=item privileges | r
+
+whether diff user privileges or not, connect user must have grant option privileges.
 
 =back
 
@@ -455,6 +468,140 @@ sub print_active_handles {
 
 1;
 
+package MySQL::Priv;
+use strict;
+use warnings FATAL => 'all';
+use English qw(-no_match_vars);
+use Carp qw(croak);
+use Data::Dumper;
+
+sub new {
+    my ($class, %args) = @_;
+    my @required_args = qw(user);
+    foreach my $arg (@required_args) {
+        die "I need a $arg argument" unless $args{$arg};
+    }
+    my $self = {
+        priv  => undef,
+        user  => undef,
+    };
+    bless $self, $class;
+    $self->{priv}     = $args{'priv'};
+    $self->{username} = $args{'user'};
+    $self->{debug}    = $args{'debug'};
+    $self->_parse();
+    return $self;
+}
+
+sub has_password {
+    my $self = shift;
+    return length($self->{user}{password}) > 0 ? 1 : 0;
+}
+
+sub priv_password {
+    my $self = shift;
+    return $self->{user}{password};
+}
+
+sub priv_options {
+    my $self = shift;
+    return $self->{user}{with};
+}
+
+sub priv_username {
+    my $self = shift;
+    return $self->{username};
+}
+
+sub priv_def {
+    my $self = shift;
+    return $self->{priv_def};
+}
+
+sub priv_dbs {
+    my $self = shift;
+    my @dbs;
+    foreach my $key (keys %{$self->{user}}) {
+        if ( ($key eq "password") or ($key eq "with") ) {
+            next;
+        }
+        push @dbs, $key;
+    }
+    return \@dbs;
+}
+
+sub priv_db_priv {
+    my ($self, $db) = @_;
+    return $self->{user}{$db}{priv};
+}
+
+sub _debug_message {
+   my $self = shift;
+   my $message = shift;
+   if ($self->{debug}) {
+      print "$message\n";
+   }
+}
+
+sub _parse_user_priv {
+    my $priv = shift;
+    my $hash_priv;
+    for my $item ( split(/, /, $priv) ) {
+        $hash_priv->{$item} = 1;
+    }
+    return $hash_priv;
+}
+
+sub _parse_with {
+    my $with = shift;
+    my $hash_with;
+    my @options = split(/\s+/, $with);
+    while( my($key, $val) = splice(@options, 0, 2) ) {
+        if ($key =~ /GRANT/i) {
+            $hash_with->{"$key $val"} = 1;
+        }
+        else {
+            $hash_with->{$key} = $val;
+        }
+    }
+    return $hash_with;
+}
+
+sub _parse {
+    my $self = shift;
+    $self->{priv_def} = $self->{priv};
+    $self->{priv_def} =~ s/`([^`]+)`/$1/gs;
+    $self->{priv_def} =~ s/\n+/\n/;
+    $self->{lines} = [ grep ! /^\s*$/, split /(?=^)/m, $self->{priv_def} ];
+
+    my @lines = @{$self->{lines}};
+    $self->_debug_message("parsing privilege '$self->{priv_def}'");
+    my $user = $self->{username};
+    while(@lines) {
+        $_ = shift @lines;
+        s/^\s*(.*?),?\s*$/$1/g;
+        if(/GRANT (.+?) ON (.+?) TO (.+)/i) {
+            my $db = $2;
+            $self->{user}{$db}{priv} = _parse_user_priv($1);
+            $self->{user}{password} ||= "";
+            $self->{user}{with} ||= "";
+            if($3 =~ /IDENTIFIED BY PASSWORD (.+)/i){
+                my $passinfo = $1;
+                if ($passinfo =~ /(.+?) WITH (.+)/i) {
+                    $self->{user}{password} = $1;
+                    $self->{user}{with} = _parse_with($2);
+                }
+                else {
+                    $self->{user}{password} = $passinfo;
+                }
+            }
+        }
+
+    } 
+}
+
+1;
+
 package MySQL::Table;
 use strict;
 use warnings FATAL => 'all';
@@ -661,6 +808,8 @@ use constant Get_All_Database_Tables   => "SELECT TABLE_SCHEMA, TABLE_NAME
 FROM information_schema.tables WHERE TABLE_SCHEMA NOT IN 
 (\"mysql\", \"test\", \"information_schema\", \"performance_schema\")";
 
+use constant Get_All_User_Priv => "SELECT user, host FROM mysql.user";
+
 sub new {
     my ( $class, %args ) = @_;
     my @required_args = qw(dbh database);
@@ -747,6 +896,11 @@ sub _get_tables_ref {
     return \%db_table;
 }
 
+sub register_table {
+    my($self, $table) = @_;
+    return MySQL::Table->new(def=> $table, debug => $self->{debug});
+}
+
 sub _get_global_variables_ref {
     my $self = shift;
     my $sth_variables = $self->{dbh}->selectall_arrayref("SHOW GLOBAL VARIABLES")
@@ -760,11 +914,6 @@ sub _get_global_variables_ref {
     return \%global_variables;
 }
 
-sub register_table {
-    my($self, $table) = @_;
-    return MySQL::Table->new(def=> $table, debug => $self->{debug});
-}
-
 sub variables_diff {
     my $self = shift;
     my $old_variables_ref = shift; # Variable_name -> Value
@@ -773,6 +922,9 @@ sub variables_diff {
     my $new_variables_ref = $self->_get_global_variables_ref();
     for my $key (keys %$new_variables_ref) {
         $self->_debug_message("comparing variables...$key");
+        if ($self->{tolerant}) {
+            next if $key eq 'gtid_executed';
+        }
         if ($old_variables_ref->{$key}) {
             if($old_variables_ref->{$key} ne $new_variables_ref->{$key}) {
                push @changes, "SET GLOBAL $key = $new_variables_ref->{$key};\n";
@@ -794,7 +946,7 @@ sub schema_diff {
     my $old_table_ref = shift; # key --> db:table
     my @changes;
     my $database = $self->{database};
-    $self->_debug_message("comaring database '$database'");
+    $self->_debug_message("comparing database '$database'");
     my $new_db_table = $self->_get_tables_ref();
 
     for my $key (keys %$old_table_ref) {
@@ -1097,6 +1249,233 @@ sub _diff_options {
         push @changes, $change;
     }
     return @changes;
+}
+
+# privileges diff
+sub _get_user_priv {
+    my ($self, $user, $host) = @_;
+    my $out = '';
+    my $sth;
+    eval {
+        $sth  = $self->{dbh}->selectcol_arrayref("SHOW GRANTS FOR \'$user\'\@\`$host\`");
+    };
+    unless ($@) {
+        foreach my $item (@$sth) {
+            chomp($item);
+            $out .= $item . "\n";
+        }
+    }
+    return $out;
+}
+
+sub _get_all_user_priv_ref {
+
+    my $self = shift;
+
+    my %hash_user_priv;
+    my $sth = $self->{dbh}->selectall_arrayref(Get_All_User_Priv);
+    foreach my $list (@$sth) {
+        my ($user, $host) = @$list;
+        $hash_user_priv{"\'$user\'\@\'$host\'"} = $self->_get_user_priv($user, $host);
+    }
+    return \%hash_user_priv;
+}
+
+sub register_priv {
+    my ($self, $user, $priv) = @_;
+    return MySQL::Priv->new(user => $user, priv => $priv, debug => $self->{$debug});
+}
+
+sub privileges_diff {
+    my $self = shift;
+    my $old_priv_ref = shift; # user --> privileges in one line
+    my @changes;
+    $self->_debug_message("comparing user privileges");
+    my $new_priv_ref = $self->_get_all_user_priv_ref();
+
+    for my $key (keys %$old_priv_ref) {
+        my $priv_old = $self->register_priv($key, $old_priv_ref->{$key});
+        my $user = $priv_old->priv_username();
+        if (exists $new_priv_ref->{$key}) {
+            $self->_debug_message("comparing for user '$user'");
+            my $priv_new = $self->register_priv($key, $new_priv_ref->{$key});
+            push @changes, $self->_diff_priv($priv_old, $priv_new);
+        }
+        else {
+            $self->_debug_message("user '$user' dropped");
+            push @changes, "DROP USER $user;\n";
+        }
+    }
+
+    for my $key (keys %$new_priv_ref) {
+        my $priv_new = $self->register_priv($key, $new_priv_ref->{$key});
+        my $user = $priv_new->priv_username();
+        if (! $old_priv_ref->{$key}) {
+            $self->_debug_message("priv for '$user' added: \n$priv_new->priv_def");
+            push @changes, $priv_new->priv_def;
+        }
+    }
+
+    my $out = '';
+    if (@changes) {
+        $out = join '', @changes;
+    }
+    return ($out, $new_priv_ref);
+}
+
+sub _diff_priv {
+    my $self = shift;
+    my @changes = (
+        $self->_diff_priv_password(@_),
+        $self->_diff_priv_with(@_),
+        $self->_diff_priv_dbs(@_),
+    );
+    $changes[-1] =~ s/\n*$/\n/ if (@changes);
+    return @changes;
+}
+
+sub _diff_priv_password {
+    my ($self, $priv1, $priv2) = @_;
+    my $user1 = $priv1->priv_username();
+    my $password1 = $priv1->priv_password() || "";
+    my $password2 = $priv2->priv_password() || "";
+
+    my @changes;
+    $self->_debug_message("comparing '$user1' password...");
+    if ($password1 ne $password2) {
+        push @changes, "SET PASSWORD FOR $user1 = $password2;\n";
+    }
+    return @changes;
+}
+
+sub _diff_priv_with {
+    my ($self, $priv1, $priv2) = @_;
+    my $user1 = $priv1->priv_username();
+    my $with1 = $priv1->priv_options();
+    my $with2 = $priv2->priv_options();
+
+    return () unless $with1 || $with2;
+    my @changes;
+
+    if ($with1) {
+        for my $key (keys %$with1) {
+            $self->_debug_message("priv1 had options '$key'");
+            if ($with2 && $with2->{$key}) {
+                # ...... WITH GRANT OPTION MAX_CONNECTIONS_PER_HOUR 50
+                if ($key ne "GRANT OPTION") {
+                    push @changes, "GRANT usage ON *.* TO $user1 WITH $key $with2->{$key};\n";
+                }
+            }
+            else {
+                if ($key eq "GRANT OPTION") {
+                    push @changes, "REVOKE GRANT OPTION ON *.* FROM $user1;\n";
+                }
+                else {
+                    push @changes, "GRANT usage ON *.* TO $user1 WITH $key 0;\n";
+                }
+            }
+        }
+    }
+
+    if ($with2) {
+        for my $key (keys %$with2) {
+            unless ($with1 && $with1->{$key}) {
+                $self->_debug_message("priv '$key' added");
+                if ($key eq "GRANT OPTION") {
+                    push @changes, "GRANT GRANT OPTION ON *.* TO $user1;\n";
+                }
+                push @changes, "GRANT usage ON *.* TO $user1 WITH $key $with2->{$key};\n";
+            }
+        }
+    }
+
+    return @changes;
+}
+
+sub _diff_priv_dbs {
+    my ($self, $priv1, $priv2) = @_;
+    my $user1 = $priv1->priv_username();
+    my $db1 = $priv1->priv_dbs();
+    my $db2 = $priv2->priv_dbs();
+
+    return () unless $db1 || $db2;
+
+    my @changes;
+    $self->_debug_message("comparing db privileges for user $user1");
+    for my $db (@$db1) {
+        my @priv_items;
+        my $db1_priv = $priv1->priv_db_priv($db);
+        my $db2_priv = $priv2->priv_db_priv($db);
+        for my $list (keys %$db1_priv) {
+            unless (exists $db2_priv->{$list}) {
+                if ($list =~ /ALL PRIVILEGES/) {
+                    push @priv_items, "ALL PRIVILEGES";
+                    last;
+                }
+                else {
+                    push @priv_items, $list;
+                }
+            }
+        }
+        my $change = do {
+            if ($priv_items[0] && $priv_items[0] eq "ALL PRIVILEGES") {
+                my $privs = join ',', (keys %$db2_priv);
+                my $priv_sql = "REVOKE ALL PRIVILEGES ON $db FROM $user1;\n";
+                $priv_sql .= length($privs) > 0
+                           ? "GRANT $privs ON $db TO $user1;\n"
+                           : "";
+                return $priv_sql;
+            }
+            elsif (@priv_items) {
+                my $privs = join ', ', @priv_items;
+                #skip revoke if new priv is all privileges
+                unless (exists $db2_priv->{"ALL PRIVILEGES"}) {
+                    "REVOKE $privs ON $db FROM $user1;\n";
+                }
+                else {
+                    ""
+                }
+            }
+            else {}
+        };
+        if ($change) {
+            push @changes, $change;
+        }
+   }
+
+   for my $db (@$db2) {
+        my @priv_items;
+        my $db1_priv = $priv1->priv_db_priv($db);
+        my $db2_priv = $priv2->priv_db_priv($db);
+        for my $list (keys $db2_priv) {
+            unless (exists $db1_priv->{$list}) {
+                if ($list =~ /ALL PRIVILEGES/) {
+                    push @priv_items, "ALL PRIVILEGES";
+                    last;
+                }
+                else {
+                    push @priv_items, $list;
+                }
+            }
+        }
+        my $change = do {
+            if ($priv_items[0] && $priv_items[0] eq "ALL PRIVILEGES") {
+                "GRANT ALL PRIVILEGES ON $db TO $user1;\n";
+            }
+            elsif (@priv_items) {
+                my $privs = join ', ', @priv_items;
+                length($privs) > 0
+                        ? "GRANT $privs ON $db TO $user1;\n"
+                        : "";
+            }
+            else {}
+        };
+        if ($change) {
+            push @changes, $change;
+        }
+   }
+
+   return @changes;
 }
 
 1;

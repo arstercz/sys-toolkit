@@ -1447,7 +1447,7 @@ sub _diff_priv_dbs {
         my @priv_items;
         my $db1_priv = $priv1->priv_db_priv($db);
         my $db2_priv = $priv2->priv_db_priv($db);
-        for my $list (keys $db2_priv) {
+        for my $list (keys %$db2_priv) {
             unless (exists $db1_priv->{$list}) {
                 if ($list =~ /ALL PRIVILEGES/) {
                     push @priv_items, "ALL PRIVILEGES";

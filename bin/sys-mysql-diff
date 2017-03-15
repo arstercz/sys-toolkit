@@ -27,6 +27,8 @@ use Carp;
 use Data::Dumper;
 use Getopt::Long qw(:config no_ignore_case);
 use English '-no_match_vars';
+use DB_File;
+use Storable;
 
 my $host     = '127.0.0.1';
 my $port     = 3306;
@@ -126,49 +128,57 @@ my $diff_object = MySQL::Diff->new(dbh => $dbh, debug => $debug,
 my @diffs;
 
 # table schema diff
-my $dbm_schema = "$work" . "/dbm-$host-$port-$database";
-dbmopen my %hash_table_list, $dbm_schema, 0644
-            or die "open $dbm_schema error: $!";
-
-my ($schema_changes, $new_db_table_ref) = $diff_object->schema_diff(\%hash_table_list);
+my $table_file = "$work" . "/$host-$port-$database-table";
+my $table_ref;
+eval { $table_ref = retrieve("$table_file"); };
+my ($schema_changes, $new_db_table_ref) = $diff_object->schema_diff($table_ref);
 if ($new_db_table_ref) {
-    for my $key (keys %hash_table_list) {
-        delete $hash_table_list{$key};
+    undef $table_ref;
+    foreach my $key (keys %$new_db_table_ref) {
+        eval { $table_ref->{$key} = $new_db_table_ref->{$key}; };
+        next if $@;
     }
-    %hash_table_list = %$new_db_table_ref;
 }
-dbmclose %hash_table_list;
+eval { store $table_ref, "$table_file"; };
 
 push @diffs, $schema_changes;
 
 # global variables diff
-my $dbm_vars = "$work" . "/dbm-$host-$port-variables";
-dbmopen my %hash_vars_list, $dbm_vars, 0644
-            or die "open $dbm_vars error: $!";
-
-my ($vars_changes, $new_db_vars_ref) = $diff_object->variables_diff(\%hash_vars_list);
+my $vars_file = "$work" . "/$host-$port-variables";
+my $vars_ref;
+eval { $vars_ref = retrieve("$vars_file"); };
+my ($vars_changes, $new_db_vars_ref) = $diff_object->variables_diff($vars_ref);
 if ($new_db_vars_ref) {
-    %hash_vars_list = %$new_db_vars_ref;
+    undef $vars_ref;
+    foreach my $key (keys %$new_db_vars_ref) {
+        eval { $vars_ref->{$key} = $new_db_vars_ref->{$key}; };
+        next if $@;
+    }
 }
-dbmclose %hash_vars_list;
-
+eval { store $vars_ref, "$vars_file"; };
 push @diffs, $vars_changes;
 
 # user privileges diff
 if($privileges) {
-    my $dbm_priv = "$work" . "/dbm-$host-$port-privileges";
-    dbmopen my %hash_priv_list, $dbm_priv, 0644
-                or die "open $dbm_priv error: $!";
-    my ($changes, $new_db_priv_ref) = $diff_object->privileges_diff(\%hash_priv_list);
+    my $priv_file = "$work" . "/$host-$port-privileges";
+    my $priv_ref;
+    eval { $priv_ref = retrieve("$priv_file"); };
+    my ($changes, $new_db_priv_ref) = $diff_object->privileges_diff($priv_ref);
     if($new_db_priv_ref) {
-        %hash_priv_list = %$new_db_priv_ref;
+        undef $priv_ref;
+        foreach my $key (keys %$new_db_priv_ref) {
+            eval { $priv_ref->{$key} = $new_db_priv_ref->{$key}; };
+            next if $@;
+        }
     }
-    dbmclose %hash_priv_list;
+    eval { store $priv_ref, "$priv_file"; };
     push @diffs, $changes;
 }
 
 # print diff
 foreach my $key (@diffs) {
+    # use utf8 encoding
+    binmode( STDOUT, ':utf8' ) or warn "Can't binmode(STDOUT): $!\n";
     print "$key" if $key;
 }
 
@@ -784,9 +794,9 @@ sub _parse {
     }
     warn "table '$self->{table_name}' didn't have terminator\n"
         unless defined $self->{table_options};
-    # skip partition def
+    #skip partition def
     #warn "table '$self->{table_name}' had trailing garbage:\n", join '', @lines
-    #    if @lines;
+        #if @lines;
 
     if ($self->{debug}) {
         printf Dumper($self);
@@ -872,6 +882,7 @@ sub _get_table_structure {
     my $sth = $self->{dbh}->prepare($query);
     $sth->execute();
     my $href = $sth->fetchrow_hashref;
+
     return $href->{'Create Table'};
 }
 

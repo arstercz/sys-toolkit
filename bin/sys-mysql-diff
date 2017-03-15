@@ -803,11 +803,13 @@ use Data::Dumper;
 
 #general sql list
 use constant Get_One_Database_Tables   => "SELECT TABLE_SCHEMA, TABLE_NAME
-FROM information_schema.tables WHERE TABLE_SCHEMA = ?";
+FROM information_schema.tables WHERE TABLE_SCHEMA = ? AND 
+TABLE_TYPE = 'BASE TABLE'";
 
 use constant Get_All_Database_Tables   => "SELECT TABLE_SCHEMA, TABLE_NAME
 FROM information_schema.tables WHERE TABLE_SCHEMA NOT IN 
-(\"mysql\", \"test\", \"information_schema\", \"performance_schema\")";
+(\"mysql\", \"test\", \"information_schema\", \"performance_schema\")
+ AND TABLE_TYPE = 'BASE TABLE'";
 
 use constant Get_All_User_Priv => "SELECT user, host FROM mysql.user";
 

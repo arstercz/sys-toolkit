@@ -938,6 +938,8 @@ sub variables_diff {
         $self->_debug_message("comparing variables...$key");
         if ($self->{tolerant}) {
             next if $key eq 'gtid_executed';
+            next if $key eq 'gtid_purged';
+            next if $key eq 'gtid_owned';
             next if $key eq 'timestamp';
         }
         if ($old_variables_ref->{$key}) {

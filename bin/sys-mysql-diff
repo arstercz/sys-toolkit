@@ -968,13 +968,19 @@ sub schema_diff {
         my $table_old = $self->register_table($old_table_ref->{$key});
         my $name = $table_old->table_name();
         $self->_debug_message("looking at tables called '$name'");
+        my $db_name = (split(/:/, $key))[0];
         if (exists $new_db_table->{$key}) {
             $self->_debug_message("comparing tables called '$name'");
             my $table_new = $self->register_table($new_db_table->{$key});
-            push @changes, $self->_diff_tables($table_old, $table_new);
+            my @temp_change = $self->_diff_tables($table_old, $table_new);
+            if (@temp_change) {
+                push @changes, "==> database: $db_name\n";
+                push @changes, @temp_change;
+            }
         }
         else {
             $self->_debug_message("table '$name' dropped");
+            push @changes, "==> database: $db_name\n";
             push @changes, "DROP TABLE $name;\n";
         }
     }
@@ -982,9 +988,13 @@ sub schema_diff {
     for my $list (keys %$new_db_table) {
         my $table_new = $self->register_table($new_db_table->{$list});
         my $name = $table_new->table_name();
+        my $db_name = (split(/:/, $list))[0];
         if (! $old_table_ref->{$list}) {
             $self->_debug_message(sprintf("table '$name' added:\n%s", $table_new->table_def));
-            push @changes, $table_new->table_def . "\n";
+            if ($table_new->table_def) {
+                push @changes, "==> database: $db_name\n";
+                push @changes, $table_new->table_def . "\n";
+            }
         }
     }
 

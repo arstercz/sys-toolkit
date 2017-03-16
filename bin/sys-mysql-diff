@@ -1387,7 +1387,9 @@ sub _diff_priv_with {
             $self->_debug_message("priv1 had options '$key'");
             if ($with2 && $with2->{$key}) {
                 # ...... WITH GRANT OPTION MAX_CONNECTIONS_PER_HOUR 50
-                if ($key ne "GRANT OPTION") {
+                # ...... WITH MAX_CONNECTIONS_PER_HOUR 50
+                if ($with2->{$key} ne $with1->{$key} && 
+                    $key ne "GRANT OPTION") {
                     push @changes, "GRANT usage ON *.* TO $user1 WITH $key $with2->{$key};\n";
                 }
             }

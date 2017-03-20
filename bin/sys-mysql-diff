@@ -995,7 +995,7 @@ sub schema_diff {
             $self->_debug_message(sprintf("table '$name' added:\n%s", $table_new->table_def));
             if ($table_new->table_def) {
                 push @changes, "==> database: $db_name\n";
-                push @changes, $table_new->table_def . "\n";
+                push @changes, $table_new->table_def . ";\n";
             }
         }
     }

@@ -1076,7 +1076,7 @@ sub _diff_fields {
                         $changes .= " UNIQUE KEY";
                     }
                 }
-                push @changes, "$changes;\n";
+                push @changes, "$changes\n";
             }
         }
     }

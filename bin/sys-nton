@@ -62,7 +62,7 @@ sub number_display {
       print "invalid number $number \n";
       exit 1;
   }
-  printf("  %-*s: 0b%-*b\n  %-*s: 0%-*o\n  %-*s: %-*d\n  %-*s: 0x%0*X\n",
+  printf("  %-*s: 0b%-*b\n  %-*s: 0%-*o\n  %-*s: %-*u\n  %-*s: 0x%0*X\n",
     $width[0], "bin", $width[0], $number,
     $width[1], "oct", $width[1], $number,
     $width[2], "dec", $width[2], $number,

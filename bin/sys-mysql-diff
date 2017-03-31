@@ -27,7 +27,6 @@ use Carp;
 use Data::Dumper;
 use Getopt::Long qw(:config no_ignore_case);
 use English '-no_match_vars';
-use DB_File;
 use Storable;
 
 my $host     = '127.0.0.1';
@@ -922,7 +921,7 @@ sub _get_global_variables_ref {
     my %global_variables;
     foreach my $list (@$sth_variables) {
         my ($key, $value) = @$list;
-        $value ||= '';
+        $value ||= '' if not defined($key);
         $global_variables{$key} = $value . ''; # ensure string value
     }
     return \%global_variables;

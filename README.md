@@ -19,6 +19,7 @@ Table of Contents
 * [sys-php-chroot](#sys-php-chroot)
 * [sys-tcp-port-proxy](#sys-tcp-port-proxy)
 * [sys-shell-type](#sys-shell-type)
+* [sys-glusterfs-rm](#sys-glusterfs-rm)
 * [sys-traffic-capture](#sys-traffic-capture)
 * [sys-diskstats](#sys-diskstats)
 * [sys-http-code](#sys-http-code)
@@ -1206,6 +1207,28 @@ REVOKE SELECT ON test.* FROM 'user_test'@'10.0.21.%';
 help message: `perl sys-mysql-diff --help`
 
 [Back to TOC](#table-of-contents)
+
+sys-glusterfs-rm
+================
+
+`type: shell`
+remove glusterfs file
+
+### Usage:
+switch to glusterfs volum dir before you remove a file
+```
+$ sys-glusterfs-rm slave_info.log 
+Would remove the following
+  .glusterfs/9f/88/9f880673-f47f-458c-b0a5-46316f9377b0
+  rm: remove regular file `.glusterfs/9f/88/9f880673-f47f-458c-b0a5-46316f9377b0'? y
+  rm: remove regular file `slave_info.log'? y
+```
+
+help message: `sys-glusterfs-rm --help`
+
+[Back to TOC](#table-of-contents)
+
+
 
 License
 =======

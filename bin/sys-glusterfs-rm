@@ -1,5 +1,6 @@
 #!/bin/bash
 # remove glusterfs file
+# read more from http://lists.gluster.org/pipermail/gluster-users/2013-August/013816.html
 # zhe.chen<chenzhe07@gmail.com>
 
 exec 2>&1

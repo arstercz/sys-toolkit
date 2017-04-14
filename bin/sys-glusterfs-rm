@@ -1,0 +1,64 @@
+#!/bin/bash
+# remove glusterfs file
+# zhe.chen<chenzhe07@gmail.com>
+
+exec 2>&1
+
+if [ $# -eq 0 ]; then
+   echo "Usage: sys-glusterfs-rm file1 file2 ..."
+fi
+
+checkcmd=$(which getfattr)
+if [ ! -x $checkcmd ]; then
+   echo "can not find getfattr command or has no permission"
+   exit 1
+fi
+
+function get_path() {
+   $checkcmd -m gfid -d -e hex "$1" |\
+     sed -n '2s/.*0x\(..\)\(..\)\(....\)\(....\)\(....\)\(....\)\(.\{12\}\)/\1\/\2\/\1\2\3-\4-\5-\6-\7/p'
+}
+
+for file in "$@";
+do
+    hidden_file_path=$(get_path $file)
+    if [ "x$hidden_file_path" = "x" ];
+    then
+        echo "$file has no gfid attr."
+        continue
+    fi
+    echo "Would remove the following"
+    echo "  .glusterfs/$hidden_file_path"
+    rm -i .glusterfs/$hidden_file_path "$file"
+done
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-glusterfs-rm - remove glusterfs file.
+
+=head1 SYNOPSIS
+
+  Usage: sys-glusterfs-rm file1 file2 ...
+
+  eg:
+    $ ./sys-glusterfs-rm file1 
+    Would remove the following
+      .glusterfs/9f/88/9f880673-f47f-458c-b0a5-46316f9377b0
+    rm: remove regular file `.glusterfs/9f/88/9f880673-f47f-458c-b0a5-46316f9377b0'? y
+    rm: remove regular file `file1'? y
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-glusterfs-rm 0.1.0
+
+=cut
+
+DOCUMENTATION

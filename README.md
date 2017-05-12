@@ -1261,18 +1261,15 @@ or
 perl sys-daemon -p /tmp/tt.pid -o /tmp/tt.log /tmp/t.sh
 Overwritting PID file /tmp/tt.pid because PID 5705 is not running.
 ```
-check the running process
-```
-
 ### check the running process
 ```
 # ps -ef|grep t.sh | grep -v 'grep'
 root      5705     1  0 19:31 ?        00:00:00 /bin/bash /tmp/t.sh
 ```
-
 use help option to read more.
 
 [Back to TOC](#table-of-contents)
+
 
 License
 =======

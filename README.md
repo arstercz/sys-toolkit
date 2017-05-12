@@ -14,6 +14,7 @@ Table of Contents
 * [sys-ipton](#sys-ipton)
 * [sys-lock-run](#sys-lock-run)
 * [sys-repeat](#sys-repeat)
+* [sys-daemon](#sys-daemon)
 * [sys-checkport](#sys-checkport)
 * [sys-echo-stderr](#sys-echo-stderr)
 * [sys-php-chroot](#sys-php-chroot)
@@ -1212,6 +1213,7 @@ sys-glusterfs-rm
 ================
 
 `type: shell`
+
 remove glusterfs file
 
 ### Usage:
@@ -1229,6 +1231,48 @@ help message: `sys-glusterfs-rm --help`
 [Back to TOC](#table-of-contents)
 
 
+sys-daemon
+==========
+
+`type: perl`
+
+run script with daemonize way.
+
+### Usage:
+
+#### make a tiny shell
+
+```
+#!/bin/bash
+
+while(true); do
+   F=$(date +%s.%N)
+   echo $F
+   sleep 1
+done
+```
+
+run t.sh with sys-daemon:
+```
+./sys-daemon -p /tmp/tt.pid -o /tmp/tt.log /tmp/t.sh
+```
+or
+```
+perl sys-daemon -p /tmp/tt.pid -o /tmp/tt.log /tmp/t.sh
+Overwritting PID file /tmp/tt.pid because PID 5705 is not running.
+```
+check the running process
+```
+
+### check the running process
+```
+# ps -ef|grep t.sh | grep -v 'grep'
+root      5705     1  0 19:31 ?        00:00:00 /bin/bash /tmp/t.sh
+```
+
+use help option to read more.
+
+[Back to TOC](#table-of-contents)
 
 License
 =======

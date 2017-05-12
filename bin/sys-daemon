@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-sys-daemon - run command with daemonize way.
+sys-daemon - run script with daemonize way.
 
 =head1 SYNOPSIS
 
@@ -69,7 +69,7 @@ exit Daemon->new(
 
 Causes  daemonize  to write the numeric process ID (PID) of the running daemon 
 to the specified file. This option is useful when the program being daemonized
-doesn’t create its own PID file.
+doesn't create its own PID file.
 
 =item log_file | o
 

@@ -45,8 +45,8 @@ sub usage {
     exit 0;
 }
 
-unless ( length($pid_file) ) {
-    print "pid_file must be specified!";
+unless ($pid_file) {
+    print "pid_file must be specified!\n";
     exit 1;
 }
 

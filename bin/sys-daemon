@@ -16,7 +16,7 @@ Usage: [OPTION...]
 
 use strict;
 use warnings;
-use Getopt::Long qw(:config no_ignore_case);
+use Getopt::Long qw(:config no_ignore_case pass_through);
 use English '-no_match_vars';
 use POSIX qw(strftime);
 use Data::Dumper;
@@ -47,6 +47,11 @@ sub usage {
 
 unless ($pid_file) {
     print "pid_file must be specified!\n";
+    exit 1;
+}
+
+unless (-e $ARGV[0]) {
+    print "$ARGV[0] must in absolute path!\n";
     exit 1;
 }
 
@@ -125,6 +130,7 @@ sub exec_command {
     unless (-x $prog) {
         die "cannot find $prog or has no execute privileges";
     }
+    print "$prog\n";
     exec ($prog, @_)
         or die "Failed to exec $prog "
                . join(" ", @_) . ": $!";

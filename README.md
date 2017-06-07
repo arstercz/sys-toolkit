@@ -40,6 +40,7 @@ Table of Contents
 * [sys-mysql-set-maxconnections](#sys-mysql-set-maxconnections)
 * [sys-mysql-sql-reject](#sys-mysql-sql-reject)
 * [sys-mysql-diff](#sys-mysql-diff)
+* [sys-mysql-error](#sys-mysql-error)
 * [License](#License)
 
 sys-genpass
@@ -1270,6 +1271,29 @@ use help option to read more.
 
 [Back to TOC](#table-of-contents)
 
+sys-mysql-error
+===============
+
+`type: perl`
+
+Explain MySQL error codes, like the mysql `perror` command. 
+Covers up to `MySQL 5.7.14-8`. All of the code msg from `Percona Server 5.7.14-8`.
+
+read more from `source_code/sql/share/errmsg-utf8.txt`.
+
+### Usage
+
+```
+# perl sys-mysql-error -c 1087
+MySQL error code 1087 (ER_LOAD_INFO): Records: %ld  Deleted: %ld  Skipped: %ld  Warnings: %ld
+
+# perl sys-mysql-error -c 4000
+Illegal error code: 4000
+```
+
+use help option to read more.
+
+[Back to TOC](#table-of-contents)
 
 License
 =======

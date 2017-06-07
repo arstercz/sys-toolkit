@@ -877,7 +877,7 @@ sub _get_table_structure {
     my $self = shift;
     my $database = shift;
     my $table = shift;
-    my $query = sprintf("SHOW CREATE TABLE %s\.%s", $database, $table);
+    my $query = sprintf("SHOW CREATE TABLE %s\.\`%s\`", $database, $table);
     my $sth = $self->{dbh}->prepare($query);
     $sth->execute();
     my $href = $sth->fetchrow_hashref;

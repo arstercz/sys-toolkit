@@ -31,7 +31,7 @@ echo "$CHROOT_DIR" | grep -q '^[^/]' && {
   exit 1
 }
 
-mkdir -p $CHROOT_DIR/{tmp,etc,etc/pki,usr}
+mkdir -p $CHROOT_DIR/{tmp,etc,etc/pki,usr,usr/share}
 chmod --reference /tmp $CHROOT_DIR/tmp
 
 # path trick for php.ini, which is always available in chroot or not.
@@ -50,6 +50,7 @@ tar cf - /usr/lib64/gconv/ | tar xf - -C $CHROOT_DIR
 cp -a /usr/lib*/libnsspem.so $CHROOT_DIR/usr/lib*/
 cp -a /usr/lib*/libsoftokn3.so $CHROOT_DIR/usr/lib*/
 cp -a /usr/lib*/libsqlite3.so* $CHROOT_DIR/usr/lib*/
+cp -a /usr/share/zoneinfo/ $CHROOT_DIR/usr/share/
 tar cf - /etc/pki/nssdb/ | tar xf - -C $CHROOT_DIR
 tar cf - /etc/pki/tls/ | tar xf - -C $CHROOT_DIR
 

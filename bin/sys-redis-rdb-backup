@@ -1,0 +1,242 @@
+#!/bin/bash
+# remote backup redis rdb file.
+# zhe.chen<chenzhe07@gmail.com>
+
+exec 2>&1
+set -e
+[[ "$TRACE" ]] && set -x
+
+#GLOBAL FUNCTION
+ts() {
+   TS=$(date +%F-%T | tr ':-' '_')
+   echo "$TS $*"
+}
+
+log() {
+   ts "[info] $*" 
+}
+
+warn() {
+   ts "[warn] $*" >&2
+   exit 1
+}
+
+for o; do
+    case "${o}" in
+         -d)          shift; OPT_DIR="$1"; shift; ;;
+         -h)          shift; OPT_HOST="$1"; shift; ;;
+         -P)          shift; OPT_PORT="$1"; shift; ;;
+         -p)          shift; OPT_PASS="$1"; shift; ;;
+         --version)   grep -A2 '^=head1 VERSION' "$0" | tail -n1; exit 0 ;;
+         --help)      perl -00 -ne 'm/^  Usage:/ && print' "$0"; exit 0 ;;
+         -*)          echo "Unknown option ${o}. Try --help."; exit 1; ;;
+    esac
+done
+
+
+export backup_dir=$OPT_DIR
+if [ ! -d "$backup_dir" ]; then
+   warn "$backup_dir is not a directory, use -b option."
+   exit 1
+fi
+
+export redis_host="${OPT_HOST:-127.0.0.1}"
+export redis_port="${OPT_PORT:-6379}"
+export redis_pass="$OPT_PASS"
+
+ssh_test() {
+  [ "$(ssh -n -o PreferredAuthentications=publickey,gssapi-with-mic,gssapi-keyex \
+     -o ConnectTimeout=3 -o GSSAPIAuthentication=no \
+     $1 '/bin/echo 2' 2>/dev/null)" = 2 ] 
+}
+
+get_redis_info() {
+  perl -e '
+      use strict;
+      use warnings FATAL => qw(all);
+      use IO::Socket::INET;
+      use Data::Dumper;
+      
+      my $n = 10; # try 10 times to check status.
+      my $now  = time(); # current time in seconds.
+      my $host = $ENV{redis_host};
+      my $port = $ENV{redis_port};
+      my $pass = $ENV{redis_pass};
+      my $command = length($pass) 
+                  ? "auth $pass\r\nbgsave\r\ninfo Persistence\r\nquit\r\n"
+                  : "bgsave\r\ninfo Persistence\r\nquit\r\n";
+          
+      sub get_socket {
+          my $socket = IO::Socket::INET->new(
+              PeerAddr => $host,
+              PeerPort => $port,
+              Proto    => "tcp",
+              Timeout  => 2
+          ) or die "unable to connect $host:$port\n";
+          
+          $socket->autoflush(1);
+          return $socket;
+      }
+   
+      # get db file path
+      sub get_dbfile {
+          my $socket = shift;
+          my @dbname;
+          my $db_command = length($pass)
+                         ? "auth $pass\r\nconfig get dir\r\nconfig get dbfilename\r\nquit\r\n"
+                         : "config get dir\r\nconfig get dbfilename\r\nquit\r\n";
+          print $socket "$db_command";
+          while (<$socket>) {
+             return "NOAUTH" if /NOAUTH/;
+             # http://redis.io/topics/protocol
+             next if /^(?:\+|\-|\:|\$|\*)/;
+             next if /(?:\bdir\b|\bdbfilename\b)/;
+             chomp($_);
+             s/\s//g;
+             push @dbname, $_;
+          }
+          return join("/", @dbname);
+      }
+   
+      # get last status msg
+      sub get_last_status {
+          my $socket = shift;
+          my %last_status = (
+             last_save_time => 0,
+             bgsave_status  => "",
+          );
+          print $socket "$command";
+          while (<$socket>) {
+             if (/NOAUTH/) {
+                 return (0, "NOAUTH");
+             }
+             # http://redis.io/topics/protocol
+             next if /^(?:\+|\-|\:|\$|\*)/;
+             chomp;
+             if (/rdb_last_save_time:(\d+)/) {
+                 $last_status{last_save_time} = $1;
+             }
+             if (/rdb_last_bgsave_status:(\w+)/) {
+                 $last_status{bgsave_status} = $1;
+             }
+             if($last_status{last_save_time} > 0
+                 && $last_status{bgsave_status} eq "ok") {
+                return($last_status{last_save_time}, $last_status{bgsave_status});
+                last;
+             }
+          }
+      }
+   
+      my $status_str;
+      my $time;
+      my $status;
+      while ($n && $n--) {
+          if ($n == 0) {
+             $status_str = "timeout";
+          }
+          my ($time, $status) = get_last_status(get_socket());
+          my $diff_time = abs($time - $now);
+          if ($status eq "NOAUTH") {
+             $status_str = "NOAUTH";
+             last;
+          }
+          elsif ( $diff_time < 30 && $status eq "ok") {
+              $status_str = "ok";
+              last;
+          } 
+          elsif ($diff_time > 30) {
+              sleep 3;
+              ($time, $status) = get_last_status(get_socket());
+          }
+      }
+      my $file_path = get_dbfile(get_socket());
+      if ($file_path ne "NOAUTH" 
+          && $status_str ne "NOAUTH") {
+         print "$file_path $status_str\n";
+      }
+      else {
+         print STDERR "-NOAUTH, maybe need redis password, use -p options\n";
+      }
+  '
+}
+
+# ssh test
+if ! $(ssh_test $redis_host); then
+   warn "cann't ssh to $redis_host"
+else 
+   log "test with ssh to $redis_host ok"
+fi
+
+# copy rdb file by rsync method
+STRING=$(date +%Y%m%d%H%M%S)
+get_redis_info | \
+while read F S
+do 
+  log "start at $STRING"
+  BAK_F="$redis_host-$redis_port-$STRING.rdb"
+  if [[ $S = 'ok' ]]; then
+     rsync -e "ssh" -azvt $redis_host:$F $backup_dir/$BAK_F
+     if [ $? = 0 ]; then
+        log "$redis_host:$redis_port backup to $backup_dir/$BAK_F ok"
+        exit 0
+     else 
+        warn "$redis_host:$redis_port backup $F failed"
+     fi
+  fi
+
+  if [[ $S = 'timeout' ]]; then
+     warn "wait bgsave 30 secs timeout, skip backup.."
+  fi
+  exit 1
+done
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-redis-rdb-backup - remote backup redis rdb file.
+
+=head1 SYNOPSIS
+
+  Usage: sys-redis-rdb-backup [OPTIONS]
+  OPTION:
+      -d OPT_DIR     the backup directory.
+      -h OPT_HOST    remote redis host address.
+      -P OPT_PORT    remote redis port address.
+      -p OPT_PASS    redis password, optional.
+      --help         Print help and exit.
+      --version      Print version and exit.
+  Options must be given as --option value, not --option=value or -Ovalue.
+  Use perldoc to read embedded documentation with more details.
+
+=head1 PRIVILEGES
+
+This script executes the following commands:
+
+=over
+
+=item ssh
+
+  use ssh to copy the rdb file.
+
+=back
+
+=over
+
+=item OPT_PASS
+
+  redis password is optional, give it value if you already set redis password.
+
+=head1 AUTHOR
+
+  chenzhe07@gmail.com
+
+=head1 VERSION
+
+  sys-redis-rdb-backup 0.1.0
+
+=cut
+
+DOCUMENTATION

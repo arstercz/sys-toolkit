@@ -26,6 +26,7 @@ Table of Contents
 * [sys-http-code](#sys-http-code)
 * [sys-http-stat](#sys-http-stat)
 * [sys-hosts-list](#sys-hosts-list)
+* [sys-redis-rdb-backup](#sys-redis-rdb-backup)
 * [sys-dns-response-time](#sys-dns-response-time)
 * [sys-kill-close-wait](#sys-kill-close-wait)
 * [sys-memory-maps](#sys-memory-maps)
@@ -1293,6 +1294,34 @@ Illegal error code: 4000
 
 use help option to read more.
 
+[Back to TOC](#table-of-contents)
+
+sys-redis-rdb-backup
+====================
+
+`type: shell`
+
+remote backup redis rdb file.
+
+### Usage
+
+```
+# ./sys-redis-rdb-backup -h 10.0.21.5 -P 6380 -d /srv/redis_backup
+2017_06_27_14_59_40 [info] test with ssh to 10.0.21.5 ok
+-NOAUTH, maybe need redis password, use -p options
+
+# ./sys-redis-rdb-backup -h 10.0.21.5 -P 6380 -d /srv/redis_backup -p xxxxxx
+2017_06_27_14_59_49 [info] test with ssh to 10.0.21.5 ok
+2017_06_27_14_59_52 [info] start at 20170627145949
+receiving incremental file list
+redis32.rdb
+
+sent 30 bytes  received 467 bytes  994.00 bytes/sec
+total size is 389  speedup is 0.78
+2017_06_27_14_59_52 [info] 10.0.21.5:6380 backup to /srv/redis_backup/10.0.21.5-6380-20170627145949.rdb ok
+```
+
+use help option to read more.
 [Back to TOC](#table-of-contents)
 
 License

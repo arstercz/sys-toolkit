@@ -1301,7 +1301,7 @@ sys-redis-rdb-backup
 
 `type: shell`
 
-remote backup redis rdb file.
+remote backup redis rdb file, execute `bgsave` before transfer rdb file.
 
 ### Usage
 

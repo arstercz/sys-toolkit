@@ -1188,20 +1188,20 @@ sub _diff_primary_key {
     return () unless $primary1 || $primary2;
 
     my @changes;
-    if ($primary1 && ! $primary2) {
+    if (defined($primary1) && ! defined($primary2)) {
         $self->_debug_message("primary key '$primary1' dropped");
         my $changes .= _index_auto_col($table2, $primary1);
         $changes = "ALTER TABLE $name1 DROP PRIMARY KEY;\n";
         push @changes, $changes;
     }
 
-    if (! $primary1 && $primary2) {
+    if (! defined($primary1) && defined($primary2)) {
         $self->_debug_message("primary key '$primary2' added");
         return () if _key_covers_auto_col($table2, $primary2);
         push @changes, "ALTER TABLE $name1 ADD PRIMARY KEY $primary2;\n";
     }
 
-    if ($primary1 ne $primary2) {
+    if (defined($primary1) && defined($primary2) && ($primary1 ne $primary2)) {
         $self->_debug_message("primary key changed");
         my $auto = _check_for_auto_col($table2, $primary1) || '';
         my $changes = $auto ? _index_auto_col($table2, $auto) : '';

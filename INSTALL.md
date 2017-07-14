@@ -17,6 +17,7 @@ DBI
 DBD::mysql
 Term::ReadKey
 Net::DNS
+Digest::HMAC
 ```
 
 some shell tools need the following commands:

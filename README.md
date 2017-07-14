@@ -1323,6 +1323,7 @@ total size is 389  speedup is 0.78
 ```
 
 use help option to read more.
+
 [Back to TOC](#table-of-contents)
 
 sys-google-totp
@@ -1337,10 +1338,11 @@ get google Authentication which used the Time-based One-time password Algorithm.
 # ./sys-google-totp --secret FNENMTM3BTB42EKM
 totp message:
   secret: FNENMTM3BTB42EKM
-    494065 (9 second(s) remaining)
+  494065 (9 second(s) remaining)
 ```
 
 use help option to read more.
+
 [Back to TOC](#table-of-contents)
 
 License

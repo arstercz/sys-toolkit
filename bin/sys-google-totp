@@ -1,0 +1,159 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-google-totp - get google Authentication which used the Time-based One-time password Algorithm.
+
+=head1 SYNOPSIS
+
+Usage: [OPTION...]
+
+see more from:
+
+https://github.com/j256/perl-two-factor-auth
+https://en.wikipedia.org/wiki/Time-based_One-time_Password_Algorithm
+
+=head1 RISKS
+
+ Need to get MySQL global status. 
+
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long qw(:config no_ignore_case);
+use English '-no_match_vars';
+use POSIX qw(strftime);
+use Data::Dumper;
+use Digest::HMAC_SHA1 qw / hmac_sha1_hex /;
+use Carp;
+
+my $secret;        #initial secret string.
+my $step     = 30; # default time step is 30s 
+my $help     = 0;
+my $verbose  = 0;
+my $loop     = 1;
+
+GetOptions(
+    "secret|s=s"   => \$secret,
+    "step|t"       => \$step,
+    "verbose|v!"   => \$verbose,
+    "help!"        => \$help,
+    "loop|l=i"     => \$loop,
+) or die "option error: $!";
+
+if ($help) {
+    usage($0);
+}
+
+sub usage {
+    my $name = shift;
+    system("perldoc $name");
+    exit 0;
+}
+
+sub generateBase32Secret {
+    my @chars = ("A".."Z", "2".."7");
+    my $length = scalar(@chars);
+    my $base32Secret = "";
+    
+    foreach(1..16) {
+        $base32Secret .= $chars[int(rand($length))];
+    }
+    return $base32Secret;
+}
+
+sub decodeBase32 {
+    my $val = shift;
+    # exit when val contains non-base32 characters
+    $val =~ tr/A-Z2-7//c
+        and Carp::croak("error: secret contains non-base32 characters");
+
+    # turn into binary characters
+    $val =~ tr|A-Z2-7|\0-\37|;
+    # unpack into binary characters
+    $val = unpack("B*", $val);
+
+    # cut off the every item which have 000 prefix
+    $val =~ s/000(.....)/$1/g;
+    #trim off some charaters if not 8 character aligned
+    my $len = length($val);
+    $val = substr($val, 0, $len & ~7) if $len & 7;
+
+    # pack back up
+    $val = pack('B*', $val);
+    return $val;
+}
+
+sub generateCurrentNumber {
+    my $base32Secret = shift;
+
+    # need a 16 character hex value
+    my $paddedTime = sprintf("%016x", int(time()/ $step));
+    # this starts with \0's
+    my $data = pack("H*", $paddedTime);
+    my $key = decodeBase32($base32Secret);
+    my $now = time();
+
+    # encrypt the data with the key and return the SHA1 of it in hex
+    my $hmac = hmac_sha1_hex($data, $key);
+
+    # take the last significat bit (1 hex char) from the encrypted string as an offset
+    my $offset = hex(substr($hmac, -1));
+    # take 4 bytes (8 hex chars) at the offset (* 2 for hex), and drop the high bit
+    my $encrypted = hex(substr($hmac, $offset * 2, 8)) & 0x7fffffff;
+
+    # the token is then the last 6 digits in the number
+    # make sure it is 0 prefixed
+    my $token = $encrypted % 1000000;
+
+    return sprintf("%06d", $token);
+}
+
+# the better ways to seed the random number
+srand(time() ^ $$);
+
+while($loop && $loop--) {
+    $secret  ||= generateBase32Secret();
+    my $code = generateCurrentNumber($secret);
+    my $secondsRemain = $step - (time() % $step);
+    print "totp message:\n  secret: $secret\n"
+          . "  $code ($secondsRemain second(s) remaining)\n";
+    sleep(1) if $loop;
+}
+
+# ###################################################################
+# Documentation.
+# ###################################################################
+
+=head1 OPTIONS
+
+=over 4
+
+=item secret=s | s
+
+secret string that is in base32 format (A-Z2-7)
+
+=item verbose|v
+
+print verbose info.
+
+=item help
+
+print help info.
+
+=item loop | l
+
+specify execute times that display totp msg, default is 1.
+
+=back
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut

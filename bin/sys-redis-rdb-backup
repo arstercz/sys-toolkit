@@ -120,7 +120,7 @@ get_redis_info() {
                  $last_status{bgsave_status} = $1;
              }
              if($last_status{last_save_time} > 0
-                 && defined($last_status{bgsave_status})) {
+                 && length($last_status{bgsave_status}) > 0) {
                 return($last_status{last_save_time}, $last_status{bgsave_status});
                 last;
              }

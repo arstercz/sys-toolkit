@@ -17,5 +17,6 @@ WriteMakefile(
         DBD::mysql    => 3.0000_0,
         Term::ReadKey => 0,
         Net::DNS      => 0,
+        Digest::HMAC  => 0,
     },
 );

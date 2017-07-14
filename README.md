@@ -21,6 +21,7 @@ Table of Contents
 * [sys-tcp-port-proxy](#sys-tcp-port-proxy)
 * [sys-shell-type](#sys-shell-type)
 * [sys-glusterfs-rm](#sys-glusterfs-rm)
+* [sys-google-totp](#sys-google-totp)
 * [sys-traffic-capture](#sys-traffic-capture)
 * [sys-diskstats](#sys-diskstats)
 * [sys-http-code](#sys-http-code)
@@ -1319,6 +1320,24 @@ redis32.rdb
 sent 30 bytes  received 467 bytes  994.00 bytes/sec
 total size is 389  speedup is 0.78
 2017_06_27_14_59_52 [info] 10.0.21.5:6380 backup to /srv/redis_backup/10.0.21.5-6380-20170627145949.rdb ok
+```
+
+use help option to read more.
+[Back to TOC](#table-of-contents)
+
+sys-google-totp
+===============
+
+`type: perl`
+
+get google Authentication which used the Time-based One-time password Algorithm.
+
+### Usage
+```
+# ./sys-google-totp --secret FNENMTM3BTB42EKM
+totp message:
+  secret: FNENMTM3BTB42EKM
+    494065 (9 second(s) remaining)
 ```
 
 use help option to read more.

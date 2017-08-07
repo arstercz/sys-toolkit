@@ -751,7 +751,7 @@ sub _parse {
             next;
         }
 
-        if (/^(KEY|UNIQUE(?: KEY)?)\s+(\S+?)(?:\s+USING\s+(?:BTREE|HASH|RTREE))?
+        if (/^(KEY|UNIQUE(?:\s+KEY)?)\s+(\S+?)(?:\s+USING\s+(?:BTREE|HASH|RTREE))?
             \s*\((.*)\)(?:\s+USING\s+(?:BTREE|HASH|RTREE))?$/x) {
             my ($type, $key, $val) = ($1, $2, $3);
             if ($self->{table_indices}{$key}) {

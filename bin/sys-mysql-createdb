@@ -34,7 +34,7 @@ my $verbose  = 0;
 my $help     = 0;
 my $createdb = '';
 my $account_user;
-my $account_host = 'localhost';
+my $account_host;
 my $account_pass;
 my $priv     = 'SELECT, DELETE, INSERT, UPDATE';
 
@@ -84,6 +84,15 @@ if ( !$account_user ) {
    warn "option --account-user should be specified the account user\n";
    exit 1;
 }
+
+if ( ($host ne '127.0.0.1')
+      or ($host ne 'localhost') ) {
+   ($account_host = $host) =~ s/\.\d+?$/\.\%/
+}
+else {
+   $account_host = $host;
+}
+
 
 sub noecho_password {
     my $prompt = shift;
@@ -405,7 +414,7 @@ account user name will be create, can not be null.
 
 =item account-host=s
 
-account user host will be create, default is localhost.
+account user host will be create, default is host option or xx.xx.xx.%.
 
 =item account-pass=s
 

@@ -18,6 +18,7 @@ Table of Contents
 * [sys-checkport](#sys-checkport)
 * [sys-echo-stderr](#sys-echo-stderr)
 * [sys-php-chroot](#sys-php-chroot)
+* [sys-nginx-subdir](#sys-nginx-subdir)
 * [sys-tcp-port-proxy](#sys-tcp-port-proxy)
 * [sys-shell-type](#sys-shell-type)
 * [sys-glusterfs-rm](#sys-glusterfs-rm)
@@ -1340,6 +1341,46 @@ totp message:
   secret: FNENMTM3BTB42EKM
   494065 (9 second(s) remaining)
 ```
+
+use help option to read more.
+
+[Back to TOC](#table-of-contents)
+
+sys-nginx-subdir
+================
+
+`type: perl`
+
+create the subdirectory in `year/month/day` format at nginx log directory.
+you can use `sys-nginx-subdir` to create the sub dirs with dynamic nginx 
+`access_log` path(the method `cronolog and pipe` is very inconvenient and 
+maybe block when pipe is no consumer; the `nginx perl` module can reduce 
+performance when you use perl module to check and create dirs).
+
+### Usage
+the access_log in nginx configure:
+```
+  location ~ ^/xxx/ {
+     if ($time_iso8601 ~ "^(\d{4})-(\d{2})-(\d{2})T(\d{2})")
+     {   
+         set $year $1;
+         set $month $2;
+         set $day $3;
+         set $hour $4;
+     }
+     access_log /data/nginx/logs/$year/$month/$day/$hour.log;
+  }
+```
+create dir with `sys-nginx-subdir`:
+```
+# ./sys-nginx-subdir -v -d /data/nginx/logs -t 1 -m
+datestring: 2017-08-12 17:30:43
+will create /web/nginx/logs/2017/08/12
+[ok] already exists /web/nginx/logs/2017/08/12
+create ok!
+```
+
+then reload the nginx with `-s` option.
 
 use help option to read more.
 

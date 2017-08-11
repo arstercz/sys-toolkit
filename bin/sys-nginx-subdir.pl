@@ -1,0 +1,126 @@
+#!/usr/bin/env perl
+# mkdir the subdirectory in log directory
+# cz 20170811
+use strict;
+use warnings;
+use File::Path qw(make_path);
+use POSIX qw(strftime);
+use Getopt::Long qw(:config no_ignore_case);
+use English '-no_match_vars';
+
+my $help     = 0;
+my $verbose  = 0;
+my $day      = 1;
+my $make     = 0;
+my $user     = 'nginx';
+my $group    = 'nginx';
+my $dir      = "/web/nginx/logs";
+
+GetOptions(
+  "help|h!"      => \$help,
+  "verbose|v!"   => \$verbose,
+  "day|t=i"      => \$day,
+  "make|m!"      => \$make,
+  "dir|d=s"      => \$dir,
+  "user|u=s"     => \$user,
+  "group|g=s"    => \$group,
+) or die "error:$!";
+
+if ($help) {
+    usage($0);
+}
+
+sub usage {
+    my $name = shift;
+    system("perldoc $name");
+    exit 0;
+}
+
+sub mk_dir {
+  my ($dir, $year, $month, $day) = @_;
+  unless (-d $dir) {
+    print "[error] $dir not exists!\n";
+    return 0;
+  }
+  print "will create $dir/$year/$month/$day\n" if $verbose;
+  unless (-d "$dir/$year/$month/$day") {
+    eval {
+       make_path("$dir/$year/$month/$day", 
+                 {
+                    mode  => 0755, 
+                    owner => $user,
+                    group => $group,
+                 });
+    };
+    if ($@) {
+       print "perl create $dir/$year/$month/$day error: $@";
+       return 0;
+    }
+    else {
+       print "[ok] create $dir/$year/$month/$day ok\n";
+    }
+  }
+  else {
+    print "[ok] already exists $dir/$year/$month/$day\n";
+  }
+  return 1;
+}
+
+sub get_date {
+  my $t = shift;
+  my $datestring  = 
+     strftime( "%Y-%m-%d %H:%M:%S", localtime(time + $t*86400) );
+  print "datestring: $datestring\n" if $verbose;
+  my ($year, $month, $day) = ($datestring =~ m/^(\d+?)-(\d+?)-(\d+?)\s/);
+  return ($year, $month, $day);
+}
+
+if (mk_dir($dir, get_date($day))) {
+  print "create ok!\n" if $verbose;
+}
+
+# ###################################################################
+# Documentation.
+# ###################################################################
+
+=head1 OPTIONS
+
+=over 4
+
+=item help | h
+
+print help message.
+
+=item verbose | v
+
+print verbose message
+
+=item day | t
+
+create the day that sub directory in year/month/day format, 
+default is 1, means create tommorow directory, you can give 
+a less than 0 value.
+
+=item dir | d
+
+the base directory that sub directory will create on.
+
+=item user | u
+
+which user owned with the created sub directory. default is nginx.
+
+=item group | g
+
+which group owned with the created sub directory, default is nginx.
+
+=back
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut

@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# mkdir the subdirectory in log directory
+# create the subdirectory in log directory
 # cz 20170811
 use strict;
 use warnings;

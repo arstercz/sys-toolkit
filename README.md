@@ -238,8 +238,8 @@ set/get a memcached key to check memcached whether is alive or not,
 this can check a memcached even it's hang or timeout.
 
 ```
-./sys-memcached-check -h 10.3.254.119 -p 11211   
-memcached 10.3.254.119:11211 check ok!
+./sys-memcached-check -h 10.0.21.5 -p 11211   
+memcached 10.0.21.5:11211 check ok!
 ```
 help message: $ ./sys-memcached-check --help
 

@@ -32,7 +32,7 @@ Table of Contents
 * [sys-dns-response-time](#sys-dns-response-time)
 * [sys-kill-close-wait](#sys-kill-close-wait)
 * [sys-memory-maps](#sys-memory-maps)
-* [sys-mem-redis-summary](#sys-mem-redis-summary)
+* [sys-memcached-check](#sys-memcached-check)
 * [sys-mysql-summary](#sys-mysql-summary)
 * [sys-mysql-adj](#sys-mysql-adj)
 * [sys-mysql-kill-blocked-thread](#sys-mysql-kill-blocked-thread)
@@ -225,49 +225,23 @@ Can be used without args.
 
 [Back to TOC](#table-of-contents)
 
-sys-mem-redis-summary
+sys-memcached-check
 =====================
 
 `type: perl`
 
+check memcached whether is alive or not
+
 #### No Dependencies
 
-to get memcached or redis summary info, output is the same as stats(slabs, size) 
-command on memcached, and info command on redis.
-
-note: does not support password authentication when get redis info.
+set/get a memcached key to check memcached whether is alive or not, 
+this can check a memcached even it's hang or timeout.
 
 ```
-$ ./sys-mem-redis-summary -h 127.0.0.1 -p 6380 -t redis
-Connected to 127.0.0.1:6380
-# Server
-redis_version:2.8.24
-redis_git_sha1:00000000
-redis_git_dirty:0
-redis_build_id:4159b299ae09869c
-redis_mode:standalone
-os:Linux 2.6.32-573.18.1.el6.x86_64 x86_64
-arch_bits:64
-multiplexing_api:epoll
-...
-# Keyspace
-db0:keys=1,expires=0,avg_ttl=0
-db1:keys=1,expires=0,avg_ttl=0
-
-
-$ ./sys-mem-redis-summary -h 127.0.0.1 -p 11211 -t memcached
-Connected to 127.0.0.1:11211
-STAT pid 2144
-STAT uptime 529773
-STAT time 1456898381
-STAT version 1.4.4
-STAT pointer_size 64
-STAT rusage_user 582.232487
-....
-STAT 128 5837
-END
+./sys-memcached-check -h 10.3.254.119 -p 11211   
+memcached 10.3.254.119:11211 check ok!
 ```
-help message: $ ./sys-mem-redis-summary --help
+help message: $ ./sys-memcached-check --help
 
 [Back to TOC](#table-of-contents)
 

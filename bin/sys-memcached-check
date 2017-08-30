@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-sys-mem-redis-summary - to get memcached or redis summary info.
+memcached-check - check memcached whether is alive or not
 
 =cut
 
@@ -12,8 +12,7 @@ sys-mem-redis-summary - to get memcached or redis summary info.
 
     options:
        host|h:  host address, default is 127.0.0.1.
-       port|p:  port number, must be specified.
-       type|t:  memcached or redis, default is redis.
+       port|p:  port number, default is 11211.
        help  :  print help info.
        verbose|v :  print source source ip address and port.
 
@@ -22,19 +21,16 @@ sys-mem-redis-summary - to get memcached or redis summary info.
 use strict;
 use warnings;
 use IO::Socket::INET;
-use Data::Dumper;
 use Getopt::Long qw(:config no_ignore_case);
 
 my $host = '127.0.0.1';
-my $port;
-my $type = "redis";
+my $port = 11211;
 my $verbose;
 my $help;
 
 GetOptions(
     "host|h=s"   => \$host,
     "port|p=i"   => \$port,
-    "type|t=s"   => \$type,
     "help!"      => \$help,
     "verbose|v!" => \$verbose,
 );
@@ -49,11 +45,6 @@ sub usage {
     exit 0;
 }
 
-unless (( $type eq 'memcached' || $type eq 'redis' )) {
-    print "unknown type: $type, memcached or redis\n";
-    exit 1;
-}
-
 unless ($port) {
     print "no port number. use --help for more info\n";
     exit 1;
@@ -61,8 +52,8 @@ unless ($port) {
 
 # memcached and redis commands
 my %commands = (
-   "memcached" => "stats\nstats slabs\nstats items\nstats sizes\nquit\n",
-   "redis"     => "info\r\nquit\r\n",
+   "check" => "set memcached-check 0 0 1\r\n1\r\nget memcached-check\r\nquit\r\n",
+   #"get" => "get memcached-check\r\nquit\r\n",
 );
 
 $| = 1;
@@ -71,26 +62,31 @@ my $socket = IO::Socket::INET->new(
     PeerAddr => $host,
     PeerPort => $port,
     Proto    => "tcp",
-    Timeout  => 2
+    Timeout  => 1
 ) or die "unable to connect $host:$port\n";
 
 $socket->autoflush(1);
-my $pid;
 
-die "can't fork: $!" unless defined($pid = fork());
-if ($pid) {
-    print STDERR "Connected to $host:$port\n";
+my $v;
+my $t;
+# check command
+print $socket "$commands{check}";
+while(<$socket>) {
+    print if $verbose;
+    last if /^END/;
+    chomp;
+    $t = 1 if /VALUE memcached-check/;
+    $v = $_ if /^\d/;
+}
+
+if ($t && $v) {
+  print "memcached $host:$port check ok!\n";
+  exit 0;
 }
 else {
-    print $socket "$commands{$type}";
-    while(<$socket>) {
-        # http://redis.io/topics/protocol
-        next if /^(?:\+|\-|\:|\$|\*)/;
-        chomp && print $_ . "\n";
-    }
+  print "memcached $host:$port check error!\n";
+  exit 124;  
 }
-
-exit;
 
 =head1 AUTHOR
 

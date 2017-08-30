@@ -788,17 +788,17 @@ extended by Varun Singh / Copyright (c) 2005 The Tcpdump Group
 THERE IS ABSOLUTELY NO WARRANTY FOR THIS PROGRAM.
 
 
-NET: 10.3.254.0 a03fe00 CMASK: 255.255.255.0 ffffff00
+NET: 10.0.21.0 a03fe00 CMASK: 255.255.255.0 ffffff00
 Device: em1
 Filter expression: tcp dst port 3306
 MySQL query filter: select user,host from mysql.user
 
-P107:	10.3.254.121	->	 10.3.254.119	TCP	64722	->	 3306	query: desc tm 
-P108:	10.3.254.121	->	 10.3.254.119	TCP	64722	->	 3306	
-P109:	10.3.254.121	->	 10.3.254.119	TCP	64722	->	 3306	query: delete from tm where a = 'hah' 
-P110:	10.3.254.121	->	 10.3.254.119	TCP	64722	->	 3306	
-P111:	10.3.254.121	->	 10.3.254.119	TCP	64722	->	 3306	query: select user,host from mysql.user 
-P112:	10.3.254.121	->	 10.3.254.119	TCP	64722	->	 3306
+P107:	10.0.21.7	->	 10.0.21.17	TCP	64722	->	 3306	query: desc tm 
+P108:	10.0.21.7	->	 10.0.21.17	TCP	64722	->	 3306	
+P109:	10.0.21.7	->	 10.0.21.17	TCP	64722	->	 3306	query: delete from tm where a = 'hah' 
+P110:	10.0.21.7	->	 10.0.21.17	TCP	64722	->	 3306	
+P111:	10.0.21.7	->	 10.0.21.17	TCP	64722	->	 3306	query: select user,host from mysql.user 
+P112:	10.0.21.7	->	 10.0.21.17	TCP	64722	->	 3306
 
 ```
 

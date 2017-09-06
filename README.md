@@ -13,6 +13,7 @@ Table of Contents
 * [sys-ascii](#sys-ascii)
 * [sys-ipton](#sys-ipton)
 * [sys-lock-run](#sys-lock-run)
+* [sys-swap](#sys-swap)
 * [sys-repeat](#sys-repeat)
 * [sys-daemon](#sys-daemon)
 * [sys-checkport](#sys-checkport)
@@ -1357,6 +1358,34 @@ create ok!
 then reload the nginx with `-s` option.
 
 use help option to read more.
+
+[Back to TOC](#table-of-contents)
+
+sys-swap
+========
+
+`type: shell`
+
+simple swap setup script for Linux
+
+### Usage
+```
+# sys-swap 8G /web/swap/swapfile
+step 1. dd /web/swap/swapfile with bs: 4096 and count: 2097152
+2097152+0 records in
+2097152+0 records out
+8589934592 bytes (8.6 GB) copied, 66.3824 s, 129 MB/s
+step 2. mkswap file /web/swap/swapfile
+Setting up swapspace version 1, size = 8388604 KiB
+no label, UUID=34ebfcf2-9d88-4326-8e16-a48aec26e1f1
+step 3. chmod file /web/swap/swapfile to 0600
+step 4. swapon file /web/swap/swapfile
+step 5. add swap info to fstab
+/web/swap/swapfile        swap     swap   defaults         0 0
+
+Done! You now have a 8 swap file at /web/swap/swapfile
+```
+show the help message with no argument.
 
 [Back to TOC](#table-of-contents)
 

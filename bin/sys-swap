@@ -1,0 +1,108 @@
+#!/bin/bash
+# simple swap setup script for Linux
+# zhe.chen<chenzhe07@gmail.com>
+
+exec 2>&1
+set -e
+
+if [ ! "$#" -ge 1 ]; then
+  echo "Usage: sys-swap {size}"
+  echo "Example: $0 4G"
+  echo "Default path: /swapfile"
+  echo "Default disk reserve: 1G"
+  echo "Optional path: Usage: $0 {size} {path} {reserve}"
+  exit 1
+fi
+
+# root access is required.
+[[ $UID -ne 0 ]] && {
+  echo "must be root to initialize chroot directory"
+  exit 1
+}
+
+# get size from first argument
+SWAP_SIZE=$(echo $1 | perl -ne 's/G//; print')
+SWAP_FILE="$2"
+DISK_PATH=$(echo $SWAP_FILE | perl -ne 's|/[^/]+?$|/|; $_ = "/" if $_ eq ""; print')
+DISK_RESERVE=1
+
+[[ ! -d "$DISK_PATH" ]] && {
+  echo "no such dirs: $DISK_PATH"
+  exit 1
+}
+
+# check path whether is enought to allocat swap size
+diskfreebytes=$(df -P -k "$DISK_PATH" | grep -v Filesystem | perl -ane 'print $F[3] * 1024')
+swapsize=$(echo $SWAP_SIZE | perl -ne 's/G//g; print')
+diskremain=$(($diskfreebytes - $swapsize*1024*1024*1024 - $DISK_RESERVE*1024*1024*1024))
+if [ $diskremain -lt 0 ]; then
+  echo "there is no enought space in $DISK_PATH to alloact $SWAP_SIZE"
+  exit 1
+fi
+
+# check file whether exists
+[[ ! -z "$2" ]] && {
+  SWAP_FILE=$2
+}
+
+[[ -e $SWAP_FILE ]] && {
+  echo "already exists $SWAP_FILE"
+  exit 1
+}
+
+# allocate size
+# why not use fallocate, see https://bugzilla.redhat.com/show_bug.cgi?id=1129205
+# and notes section in swapon man page.
+#fallocate -l $SWAP_SIZE $SWAP_FILE
+COUNT=$(($SWAP_SIZE*1024*1024*1024/4096))
+echo "step 1. dd $SWAP_FILE with bs: 4096 and count: $COUNT"
+dd if=/dev/zero of=$SWAP_FILE bs=4096 count=$COUNT
+[[ "$?" -eq 0 ]] && {
+  echo "step 2. mkswap file $SWAP_FILE"
+  mkswap $SWAP_FILE
+  echo "step 3. chmod file $SWAP_FILE to 0600"
+  chmod 0600 $SWAP_FILE
+  echo "step 4. swapon file $SWAP_FILE"
+  if swapon $SWAP_FILE; then
+    echo "step 5. add swap info to fstab"
+    echo "$SWAP_FILE        swap     swap   defaults         0 0" | tee /etc/fstab -a # add to fstab
+    echo
+    echo "Done! You now have a $SWAP_SIZE GB swap file at $SWAP_FILE"
+  fi
+}
+
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-swap - simple swap setup script for Linux
+
+=head1 SYNOPSIS
+
+  Usage: sys-swap
+
+  eg:
+     ./sys-swap 
+     Usage: sys-swap {size}
+     Example: ./sys-swap 4G
+     Default path: /swapfile
+     Default disk reserve: 1G
+
+     Optional path: Usage: ./sys-swap {size} {path} {reserve}
+
+     reserve option ensure that the available disk space is enought.
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-swap 0.1.0
+
+=cut
+
+DOCUMENTATION

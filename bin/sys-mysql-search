@@ -1,0 +1,526 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-mysql-search - search mysql metadata info, include database name, 
+                   table name, column name, etc.
+
+=head1 SYNOPSIS
+
+Usage: [OPTION...]
+
+=head1 RISKS
+
+sys-mysql-search use LIKE syntax to search metadata info. AND will set
+innodb_stats_on_metadata = 0 when get metadata.
+
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long qw(:config no_ignore_case);
+use English '-no_match_vars';
+use Data::Dumper;
+use POSIX qw(strftime);
+
+# constant sql
+use constant Get_metadata_SQL     => "SELECT \@\@global.innodb_stats_on_metadata";
+use constant Set_metadata_SQL_Off => "SET global innodb_stats_on_metadata = 0";
+use constant Set_metadata_SQL_On  => "SET global innodb_stats_on_metadata = 1";
+
+my $host     = '127.0.0.1';
+my $port     = 3306;
+my $user     = 'root';
+my $password = '';
+my $askpass  = 0;
+my $database = 'information_schema';
+my $charset  = 'utf8';
+my $help     = 0;
+my $verbose  = 0;
+my $metadata = 't';
+my $search   = '';
+
+GetOptions(
+    "host|h=s"      => \$host,
+    "port|P=i"      => \$port,
+    "user|u=s"      => \$user,
+    "password|p=s"  => \$password,
+    "askpass!"      => \$askpass,
+    "database|d=s"  => \$database,
+    "charset|c=s"   => \$charset,
+    "matedata|m=s"  => \$metadata,
+    "search|s=s"    => \$search,
+    "verbose|v!"    => \$verbose,
+    "help!"         => \$help,
+) or die "option error: $!";
+
+if ($help) {
+    usage($0);
+}
+
+sub usage {
+    my $name = shift;
+    system("perldoc $name");
+    exit 0;
+}
+
+if ($askpass) {
+   $password = noecho_password("Enter password ");
+}
+
+if ( !$password ) {
+    warn "Can not connect to MySQL without password.";
+    usage($0);
+    exit 1;
+}
+
+if (defined($search) && $search eq '' ) {
+    warn "search option cann't be empty.";
+    exit 1;
+}
+
+unless (($metadata eq 'd' || $metadata eq 't' 
+         || $metadata eq 'c')) {
+    warn "metadata option shoule be d, t or c.";
+    exit 1;
+}
+
+sub noecho_password {
+    my $prompt = shift;
+    local $OUTPUT_AUTOFLUSH = 1;
+    my $response;
+    eval {
+        require Term::ReadKey;
+        Term::ReadKey->import(qw( ReadMode ReadKey ));
+        if ($OSNAME =~ m/MSWin/) {
+            require Win32::Console::ANSI;
+        }
+        print "$prompt: ";
+        ReadMode('noecho');
+        $response = <STDIN>;
+        chomp($response);
+        ReadMode('normal');
+        print "\n" or die 
+            "Cannot print: $OS_ERROR";
+    };
+    if ($EVAL_ERROR) {
+        die "Cannot read respose; is Term::ReadKey installed? $EVAL_ERROR";
+    }
+    return $response;
+}
+
+sub is_metadata_on {
+    my $dbh   = shift;
+    my $value = get_variable($dbh, Get_metadata_SQL);
+    return 1 if( defined($value) && $value eq "ON" );
+    return 0;
+}
+
+sub get_variable {
+    my $dbh   = shift;
+    my $query = shift;
+    my $sth   = $dbh->prepare($query);
+    $sth->execute();
+    my $href = $sth->fetchrow_hashref;
+    return $href->{Value};
+}
+
+sub set_variable {
+    my $dbh   = shift;
+    my $query = shift;
+    eval {
+      $dbh->do($query);
+    };
+    if($@) {
+      return 0;
+    }
+    else {
+      return 1;
+    }
+}
+
+# get db handle
+printf( "connect to %s, %d, %s, xxxxxxxx ...\n", $host, $port, $user )
+  if $verbose;
+my $dbpre = MySQL::dbh->new(
+    host     => $host,
+    port     => $port,
+    user     => $user,
+    password => $password,
+    charset  => $charset,
+    driver   => 'mysql',
+);
+
+sub format_print {
+    my $ref = shift;
+    if (@$ref + 0 == 2) {
+        print " " x 4
+              . "SCHEMA: " . $ref->[0]
+              . ", CHARSET: " . $ref->[1]
+              . "\n";
+    }
+    if (@$ref + 0 == 3) {
+        print " " x 4
+              . "SCHEMA: " . $ref->[0]
+              . ", TABLE: " . $ref->[1]
+              . ", BASE TYPE: " . $ref->[2]
+              . "\n";
+    }
+    if (@$ref + 0 == 4) {
+        print " " x 4
+              . "SCHEMA: " . $ref->[0]
+              . ", TABLE: " . $ref->[1]
+              . ", COLUMN: " . $ref->[2]
+              . ", DATA TYPE: " . $ref->[3]
+              . "\n";
+    }
+}
+
+my $dbh = $dbpre->get_dbh( $database, { AutoCommit => 1 } ) or
+                            die "Can't get dbh.. $host:$port";
+
+my %hash_map = (
+  'd' => ['dbname', 'dbcharset'],
+  't' => ['dbname', 'tbname', 'tbtype'],
+  'c' => ['dbname', 'tbname', 'cname', 'ctype']
+);
+
+my %sql_select = (
+    'd' => <<"SQL_END",
+SELECT SCHEMA_NAME AS dbname, DEFAULT_CHARACTER_SET_NAME AS dbcharset
+FROM information_schema.SCHEMATA
+WHERE SCHEMA_NAME NOT IN ('mysql', 'information_schema', 'performance_schema') 
+AND SCHEMA_NAME LIKE ? LIMIT 20
+SQL_END
+
+    't' => <<"SQL_END",
+SELECT TABLE_SCHEMA AS dbname, TABLE_NAME AS tbname, TABLE_TYPE AS tbtype
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema')
+AND TABLE_NAME LIKE ? LIMIT 20
+SQL_END
+
+    'c' => <<"SQL_END",
+SELECT TABLE_SCHEMA AS dbname, TABLE_NAME AS tbname, COLUMN_NAME AS cname, DATA_TYPE ctype
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema')
+AND COLUMN_NAME LIKE ? LIMIT 20
+SQL_END
+);
+
+# check innodb_stats_on_metadata
+my $is_metadata = 0;
+if (is_metadata_on($dbh)) {
+    unless (set_variable($dbh, Set_metadata_SQL_Off)) {
+        die "set innodb_stats_on_metadata error!";
+        exit 2;
+    }
+    $is_metadata = 1;
+}
+
+my $metadata_info = 
+    $dbh->selectall_arrayref($sql_select{$metadata}, undef, $search)
+     or die "get metadata error";
+
+print " " x 2 . "$host:$port" . "\n" if @$metadata_info > 0;
+foreach my $info (@$metadata_info) {
+     format_print($info);
+}
+
+if ($is_metadata) {
+    unless (set_variable($dbh, Set_metadata_SQL_On)) {
+      warn "recover innodb_stats_on_metadata to 1 error!";
+      exit 3;
+    }
+}
+
+# ###################################################################
+# Documentation.
+# ###################################################################
+
+=head1 OPTIONS
+
+=over 4
+
+=item host=s | h
+
+MySQL host address, default value is '127.0.0.1'
+
+=item port=i | P
+
+MySQL port number. default value is 3306
+
+=item user=s | u
+
+MySQL username. default value is monitor
+
+=item password=s | p
+
+MySQL user password. no default value.
+
+=item askpass
+
+prompt for password options when connect to MySQL.
+
+=item database=s | D
+
+MySQL database will be used, default is 'information_schema'.
+
+=item charset=s | A
+
+The character used when connect to MySQL, default value is UTF8.
+
+=item metadata=s | m
+
+which type metadata to search, d to database, t to tables, c to columns.
+defualt is t for search table name.
+
+=item search=s | s
+
+search string, cann't be empty, you can use SQL regexp. use with metadata option.
+
+=item verbose|v
+
+print verbose info.
+
+=item help
+
+print help info.
+
+=back
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut
+
+package MySQL::dbh;
+# Get the database handle which user use, and this database
+# handle object should be destroy when leave MySQL database.
+
+use strict;
+use warnings FATAL => 'all';
+use constant PTDEBUG => $ENV{PTDEBUG} || 0;
+use English qw(-no_match_vars);
+use DBI;
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+
+use Data::Dumper;
+$Data::Dumper::Indent    = 1;
+$Data::Dumper::Sortkeys  = 1;
+$Data::Dumper::Quotekeys = 0;
+
+require Exporter;
+@ISA     = qw(Exporter);
+@EXPORT  = qw( get_dbh disconnect );
+$VERSION = '0.1.0';
+
+eval { require DBI; };
+
+if ($@) {
+    die "Cannot connect to MySQL because the Perl DBI module is not "
+      . "installed or not found.  Run 'perl -MDBI' to see the directories "
+      . "that Perl searches for DBI.  If DBI is not installed, try:\n"
+      . "  Debian/Ubuntu  apt-get install libdbi-perl\n"
+      . "  RHEL/CentOS    yum install perl-DBI\n"
+      . "  OpenSolaris    pkg install pkg:/SUNWpmdbi\n";
+}
+
+sub host {
+    my $self = shift;
+    $self->{host} = shift if @_;
+    return $self->{host};
+}
+
+sub port {
+    my $self = shift;
+    $self->{port} = shift if @_;
+    return $self->{port};
+}
+
+sub user {
+    my $self = shift;
+    $self->{user} = shift if @_;
+    return $self->{user};
+}
+
+sub password {
+    my $self = shift;
+    $self->{password} = shift if @_;
+    return $self->{password};
+}
+
+sub charset {
+    my $self = shift;
+    $self->{charset} = shift if @_;
+    return $self->{charset};
+}
+
+sub driver {
+    my $self = shift;
+    $self->{driver} = shift if @_;
+    return $self->{driver};
+}
+
+sub new {
+    my ( $class, %args ) = @_;
+    my @required_args = qw(host port user password);
+    PTDEBUG && print Dumper(%args);
+
+    foreach my $arg (@required_args) {
+        warn "I need a $arg argument" unless $args{$arg};
+    }
+
+    my $self = {};
+    bless $self, $class;
+
+    # options should be used.
+    $self->host( $args{'host'}         || 127.0.0.1 );
+    $self->port( $args{'port'}         || 3306 );
+    $self->user( $args{'user'}         || 'audit' );
+    $self->password( $args{'password'} || '' );
+    $self->charset( $args{'charset'}   || 'utf8' );
+    $self->driver( $args{'driver'}     || 'mysql' );
+
+    return $self;
+}
+
+sub get_dbh {
+    my ( $self, $database, $opts ) = @_;
+    $opts ||= {};
+    my $host     = $self->{host};
+    my $port     = $self->{port};
+    my $user     = $self->{user};
+    my $password = $self->{password};
+    my $charset  = $self->{charset};
+    my $driver   = $self->{driver};
+
+    my $defaults = {
+        AutoCommit         => 0,
+        RaiseError         => 1,
+        PrintError         => 0,
+        ShowErrorStatement => 1,
+        mysql_enable_utf8  => ( $charset =~ m/utf8/i ? 1 : 0 ),
+    };
+    @{$defaults}{ keys %$opts } = values %$opts;
+
+    if ( $opts->{mysql_use_result} ) {
+        $defaults->{mysql_use_result} = 1;
+    }
+
+    my $dbh;
+    my $tries = 2;
+    while ( !$dbh && $tries-- ) {
+        PTDEBUG
+          && print Dumper(
+            join( ', ', map { "$_=>$defaults->{$_}" } keys %$defaults ) );
+        $dbh = eval {
+            DBI->connect(
+                "DBI:$driver:database=$database;host=$host;port=$port",
+                $user, $password, $defaults );
+        };
+
+        if ( !$dbh && $@ ) {
+            if ( $@ =~ m/locate DBD\/mysql/i ) {
+                warn
+"Cannot connect to MySQL because the Perl DBD::mysql module is "
+                  . "not installed or not found.  Run 'perl -MDBD::mysql' to see "
+                  . "the directories that Perl searches for DBD::mysql.  If "
+                  . "DBD::mysql is not installed, try:\n"
+                  . "  Debian/Ubuntu  apt-get install libdbd-mysql-perl\n"
+                  . "  RHEL/CentOS    yum install perl-DBD-MySQL\n"
+                  . "  OpenSolaris    pgk install pkg:/SUNWapu13dbd-mysql\n";
+            }
+            elsif ( $@ =~ m/not a compiled character set|character set utf8/i )
+            {
+                PTDEBUG && print 'Going to try again without utf8 support\n';
+                delete $defaults->{mysql_enable_utf8};
+            }
+            if ( !$tries ) {
+                warn "$@";
+                return;
+            }
+       }
+    }
+
+    if ( $driver =~ m/mysql/i ) {
+        my $sql;
+        $sql = 'SELECT @@SQL_MODE';
+        PTDEBUG && print "+-- $sql\n";
+
+        my ($sql_mode) = eval { $dbh->selectrow_array($sql) };
+        warn "Error getting the current SQL_MORE: $@" if $@;
+
+        if ($charset) {
+            $sql = qq{/*!40101 SET NAMES "$charset"*/};
+            PTDEBUG && print "+-- $sql\n";
+            eval { $dbh->do($sql) };
+            warn "Error setting NAMES to $charset: $@" if $@;
+            PTDEBUG && print "Enabling charset to STDOUT\n";
+            if ( $charset eq 'utf8' ) {
+                binmode( STDOUT, ':utf8' )
+                  or warn "Can't binmode(STDOUT, ':utf8'): $!\n";
+            }
+            else {
+                binmode(STDOUT) or warn "Can't binmode(STDOUT): $!\n";
+            }
+        }
+
+        $sql =
+            'SET @@SQL_QUOTE_SHOW_CREATE = 1'
+          . '/*!40101, @@SQL_MODE=\'NO_AUTO_VALUE_ON_ZERO'
+          . ( $sql_mode ? ",$sql_mode" : '' ) . '\'*/';
+        PTDEBUG && print "+-- $sql\n";
+        eval { $dbh->do($sql) };
+        warn "Error setting SQL_QUOTE_SHOW_CREATE, SQL_MODE"
+          . ( $sql_mode ? " and $sql_mode" : '' ) . ": $@"
+          if $@;
+    }
+
+    if (PTDEBUG) {
+        print Dumper(
+            $dbh->selectrow_hashref(
+'SELECT DATABASE(), CONNECTION_ID(), VERSION()/*!50038, @@hostname*/'
+            )
+        );
+        print "+-- 'Connection info:', $dbh->{mysql_hostinfo}\n";
+        print Dumper(
+            $dbh->selectall_arrayref(
+                "SHOW VARIABLES LIKE 'character_set%'",
+                { Slice => {} }
+            )
+        );
+        print '+-- $DBD::mysql::VERSION:' . "$DBD::mysql::VERSION\n";
+        print '+-- $DBI::VERSION:' . "$DBI::VERSION\n";
+    }
+    return $dbh;
+}
+
+# handle should be destroy.
+sub disconnect {
+    my ( $self, $dbh ) = @_;
+    PTDEBUG && $self->print_active_handles( $self->get_dbh );
+    $dbh->disconnect;
+}
+
+sub print_active_handles {
+    my ( $self, $thing, $level ) = @_;
+    $level ||= 0;
+    printf(
+        "# Active %sh: %s %s %s\n",
+        ( $thing->{Type} || 'undef' ),
+        "\t" x $level,
+        $thing,
+        ( ( $thing->{Type} || '' ) eq 'st' ? $thing->{Statement} || '' : '' )
+    ) or warn "Cannot print: $OS_ERROR";
+    foreach my $handle ( grep { defined } @{ $thing->{ChildHandles} } ) {
+        $self->print_active_handles( $handle, $level + 1 );
+    }
+}
+
+1;

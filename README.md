@@ -45,6 +45,7 @@ Table of Contents
 * [sys-mysql-sql-reject](#sys-mysql-sql-reject)
 * [sys-mysql-diff](#sys-mysql-diff)
 * [sys-mysql-error](#sys-mysql-error)
+* [sys-mysql-search](#sys-mysql-search)
 * [License](#License)
 
 sys-genpass
@@ -1386,6 +1387,25 @@ step 5. add swap info to fstab
 Done! You now have a 8 swap file at /web/swap/swapfile
 ```
 show the help message with no argument.
+
+[Back to TOC](#table-of-contents)
+
+sys-mysql-search
+================
+
+`type: perl`
+search mysql metadata info, include database name, table name, column name.
+
+### Usage
+```
+# sys-mysql-search -h 10.0.21.5 -P 3301 -u root --askpass -s %count% -m t
+Enter password : 
+  10.0.21.5:3301
+      SCHEMA: graph, TABLE: endpoint_counter, BASE TYPE: BASE TABLE
+      SCHEMA: test, TABLE: count_test, BASE TYPE: BASE TABLE
+      SCHEMA: test, TABLE: pw_share_count, BASE TYPE: BASE TABLE
+```
+you can use `SQL regexp` in `--search` option. use the help option to read more.
 
 [Back to TOC](#table-of-contents)
 

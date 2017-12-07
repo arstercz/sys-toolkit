@@ -85,8 +85,9 @@ if ( !$account_user ) {
    exit 1;
 }
 
-if ( ($host ne '127.0.0.1')
-      or ($host ne 'localhost') ) {
+if ( (($host ne '127.0.0.1')
+      or ($host ne 'localhost')) 
+      && $account_host !~ /\%/ ) {
    ($account_host = $host) =~ s/\.\d+?$/\.\%/
 }
 else {

@@ -116,7 +116,7 @@ my $dbh = $dbpre->get_dbh( $database, { AutoCommit => 1 } ) or
 my $cur_threadid = $dbh->{'mysql_thread_id'};
 
 my $sql_block_info =<<"SQL_END";
-SELECT id, user, host, db, state, time, IFNULL(info, 'NULL')
+SELECT id, user, host, db, IFNULL(state, 'NULL'), time, IFNULL(info, 'NULL')
 FROM information_schema.processlist
 WHERE DB is NOT NULL
       AND COMMAND NOT IN ('Binlog Dump', 'Connect', 'Sleep')

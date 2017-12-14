@@ -3,7 +3,7 @@
 =head1 NAME
 
 sys-mysql-search - search mysql metadata info, include database name, 
-                   table name, column name, etc.
+                   table name, column name, variables and status.
 
 =head1 SYNOPSIS
 
@@ -80,8 +80,9 @@ if (defined($search) && $search eq '' ) {
 }
 
 unless (($metadata eq 'd' || $metadata eq 't' 
-         || $metadata eq 'c')) {
-    warn "metadata option shoule be d, t or c.";
+         || $metadata eq 'c' || $metadata eq 'v'
+         || $metadata eq 's' )) {
+    warn "metadata option shoule be d, t, c, v, s.";
     exit 1;
 }
 
@@ -153,26 +154,35 @@ my $dbpre = MySQL::dbh->new(
 
 sub format_print {
     my $ref = shift;
-    if (@$ref + 0 == 2) {
-        print " " x 4
-              . "SCHEMA: " . $ref->[0]
-              . ", CHARSET: " . $ref->[1]
-              . "\n";
-    }
-    if (@$ref + 0 == 3) {
-        print " " x 4
-              . "SCHEMA: " . $ref->[0]
-              . ", TABLE: " . $ref->[1]
-              . ", BASE TYPE: " . $ref->[2]
-              . "\n";
-    }
-    if (@$ref + 0 == 4) {
-        print " " x 4
-              . "SCHEMA: " . $ref->[0]
-              . ", TABLE: " . $ref->[1]
-              . ", COLUMN: " . $ref->[2]
-              . ", DATA TYPE: " . $ref->[3]
-              . "\n";
+    if ($metadata eq 'v' || $metadata eq 's') {
+        if (@$ref + 0 == 2) {
+            print " " x 4
+                  . "NAME: " . $ref->[0]
+                  . ", VALUE: " . $ref->[1]
+                  . "\n";
+        } 
+    } else {
+        if (@$ref + 0 == 2) {
+            print " " x 4
+                  . "SCHEMA: " . $ref->[0]
+                  . ", CHARSET: " . $ref->[1]
+                  . "\n";
+        }
+        if (@$ref + 0 == 3) {
+            print " " x 4
+                  . "SCHEMA: " . $ref->[0]
+                  . ", TABLE: " . $ref->[1]
+                  . ", BASE TYPE: " . $ref->[2]
+                  . "\n";
+        }
+        if (@$ref + 0 == 4) {
+            print " " x 4
+                  . "SCHEMA: " . $ref->[0]
+                  . ", TABLE: " . $ref->[1]
+                  . ", COLUMN: " . $ref->[2]
+                  . ", DATA TYPE: " . $ref->[3]
+                  . "\n";
+        }
     }
 }
 
@@ -205,6 +215,12 @@ SELECT TABLE_SCHEMA AS dbname, TABLE_NAME AS tbname, COLUMN_NAME AS cname, DATA_
 FROM information_schema.COLUMNS
 WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema')
 AND COLUMN_NAME LIKE ? LIMIT 20
+SQL_END
+    'v' => <<"SQL_END",
+SHOW GLOBAL VARIABLES LIKE ?
+SQL_END
+    's' => <<"SQL_END",
+SHOW GLOBAL STATUS LIKE ?
 SQL_END
 );
 
@@ -272,7 +288,14 @@ The character used when connect to MySQL, default value is UTF8.
 
 =item metadata=s | m
 
-which type metadata to search, d to database, t to tables, c to columns.
+which type metadata to search:
+
+  d: database
+  t: tables
+  c: columns
+  v: variables
+  s: status
+
 defualt is t for search table name.
 
 =item search=s | s

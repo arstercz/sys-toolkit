@@ -158,7 +158,7 @@ sub format_print {
         if (@$ref + 0 == 2) {
             print " " x 4
                   . "NAME: " . $ref->[0]
-                  . ", VALUE: " . $ref->[1]
+                  . ", VALUE: " . ($ref->[1] || '')
                   . "\n";
         } 
     } else {
@@ -189,31 +189,25 @@ sub format_print {
 my $dbh = $dbpre->get_dbh( $database, { AutoCommit => 1 } ) or
                             die "Can't get dbh.. $host:$port";
 
-my %hash_map = (
-  'd' => ['dbname', 'dbcharset'],
-  't' => ['dbname', 'tbname', 'tbtype'],
-  'c' => ['dbname', 'tbname', 'cname', 'ctype']
-);
-
 my %sql_select = (
     'd' => <<"SQL_END",
 SELECT SCHEMA_NAME AS dbname, DEFAULT_CHARACTER_SET_NAME AS dbcharset
 FROM information_schema.SCHEMATA
-WHERE SCHEMA_NAME NOT IN ('mysql', 'information_schema', 'performance_schema') 
+WHERE SCHEMA_NAME NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys') 
 AND SCHEMA_NAME LIKE ? LIMIT 20
 SQL_END
 
     't' => <<"SQL_END",
 SELECT TABLE_SCHEMA AS dbname, TABLE_NAME AS tbname, TABLE_TYPE AS tbtype
 FROM information_schema.TABLES
-WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema')
+WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')
 AND TABLE_NAME LIKE ? LIMIT 20
 SQL_END
 
     'c' => <<"SQL_END",
 SELECT TABLE_SCHEMA AS dbname, TABLE_NAME AS tbname, COLUMN_NAME AS cname, DATA_TYPE ctype
 FROM information_schema.COLUMNS
-WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema')
+WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')
 AND COLUMN_NAME LIKE ? LIMIT 20
 SQL_END
     'v' => <<"SQL_END",

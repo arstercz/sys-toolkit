@@ -1394,7 +1394,7 @@ sys-mysql-search
 ================
 
 `type: perl`
-search mysql metadata info, include database name, table name, column name.
+search mysql metadata info, include database name, table name, column name, variable or status.
 
 ### Usage
 ```

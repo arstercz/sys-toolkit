@@ -20,6 +20,7 @@ Table of Contents
 * [sys-echo-stderr](#sys-echo-stderr)
 * [sys-php-chroot](#sys-php-chroot)
 * [sys-nginx-subdir](#sys-nginx-subdir)
+* [sys-murmur3](#sys-murmur3)
 * [sys-tcp-port-proxy](#sys-tcp-port-proxy)
 * [sys-shell-type](#sys-shell-type)
 * [sys-glusterfs-rm](#sys-glusterfs-rm)
@@ -1406,6 +1407,19 @@ Enter password :
       SCHEMA: test, TABLE: pw_share_count, BASE TYPE: BASE TABLE
 ```
 you can use `SQL regexp` in `--search` option. use the help option to read more.
+
+sys-murmur3
+===========
+
+`type: perl`
+murmur Murmur3 32bit hash calculate. read more from [murmurHash](https://en.wikipedia.org/wiki/MurmurHash)
+
+### Usage
+```
+# sys-murmur3 -s "hello world"
+1755899637
+```
+use help option to read more.
 
 [Back to TOC](#table-of-contents)
 

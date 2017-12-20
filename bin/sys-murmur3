@@ -1,0 +1,138 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-murmur3 - murmur Murmur3 32bit hash calculate.
+
+=cut
+
+=head1 SYNOPSIS
+
+    use sys-murmur3 --help for more info.
+
+    # sys-murmur3 -s "hello world"
+    1755899637
+
+    options:
+       strs|s: the string will by hashed by the murmur3.
+       help|h: print help info.
+
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long;
+
+use constant C1 => 0xcc9e2d51;
+use constant C2 => 0x1b873593;
+use constant C3 => 0x85ebca6b;
+use constant C4 => 0xc2b2ae35;
+use constant R1 => 15;
+use constant R2 => 13;
+use constant M  => 5;
+use constant N  => 0xe6546b64;
+
+
+my $strs;
+my $help;
+
+GetOptions(
+  "strs|s=s"  => \$strs,
+  "help|h!"   => \$help,
+);
+
+if($help) {
+  usage($0);
+}
+
+sub usage {
+  my $name = shift;
+  system("perldoc $name");
+  exit 0;
+}
+
+unless (defined $strs) {
+  print "need strs value\n";
+  exit 1;
+}
+
+# ref https://github.com/gitpan/Digest-MurmurHash3-PurePerl/
+# https://en.wikipedia.org/wiki/MurmurHash
+sub murmur3 {
+  my($key, $seed) = @_;
+  $seed ||= 0;
+  utf8::encode($key);
+  my $len        = length($key);
+  my $num_blocks = int($len % 4);
+  my $tail_len   = $len % 4;
+  my @vals       = unpack 'V*C*', $key;
+  my $h1         = $seed;
+
+  my @remains;
+  if ($tail_len > 0) {
+    @remains = @vals[$len - $tail_len .. $#vals];
+  }
+
+  foreach my $k (@vals) {
+    $h1 ^= _mmix32($k);
+    $h1 = (($h1 << R2) | ($h1 >> (32 - R2)));
+    use integer;
+    $h1 = _to_uint32($h1 * M + N)
+  }
+
+  if ($tail_len > 0) {
+    my $k = 0;
+    #convert to little endian
+    for my $v (reverse @remains) {
+      $k = (($k << 8) | $v);
+    }
+    $k = _mmix32($k);
+    $h1 = $h1 ^ $k;
+  }
+
+  $h1 = $h1 ^ $len;
+  $h1 = _fmix32($h1);
+  return $h1;
+}
+
+sub _fmix32 {
+  my $h = shift;
+  $h = ($h ^ ($h >> 16));
+  {
+    use integer;
+    $h = _to_uint32($h * C3);
+  }
+  $h = ($h ^ ($h >> 13));
+  {
+    use integer;
+    $h = _to_uint32($h * C4);
+  }
+  $h = ($h ^ ($h >> 16));
+  return $h;
+}
+
+sub _mmix32 {
+  my $k = shift;
+  use integer;
+  $k = _to_uint32($k * C1);
+  $k = (($k << R1) | ($k >> (32 - R1)));
+  $k = _to_uint32($k * C2);
+  return $k;
+}
+
+sub _to_uint32 {
+  no integer;
+  return $_[0] & 0xFFFFFFFF;
+}
+
+print murmur3($strs) . "\n";
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut

@@ -1419,7 +1419,7 @@ murmur Murmur3 32bit hash calculate. read more from [murmurHash](https://en.wiki
 ### Usage
 ```
 # sys-murmur3 -s "hello world"
-1755899637
+2951810136
 ```
 use help option to read more.
 

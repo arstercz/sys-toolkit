@@ -11,7 +11,7 @@ sys-murmur3 - murmur Murmur3 32bit hash calculate.
     use sys-murmur3 --help for more info.
 
     # sys-murmur3 -s "hello world"
-    1755899637
+    2951810136
 
     options:
        strs|s: the string will by hashed by the murmur3.

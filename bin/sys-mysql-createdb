@@ -34,7 +34,7 @@ my $verbose  = 0;
 my $help     = 0;
 my $createdb = '';
 my $account_user;
-my $account_host;
+my $account_host = $host;
 my $account_pass;
 my $priv     = 'SELECT, DELETE, INSERT, UPDATE';
 

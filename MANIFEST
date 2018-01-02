@@ -26,6 +26,7 @@ bin/sys-mysql-error
 bin/sys-mysql-kill-blocked-thread
 bin/sys-mysql-kill-long-query
 bin/sys-mysql-qps
+bin/sys-mysql-repl
 bin/sys-mysql-search
 bin/sys-mysql-set-maxconnections
 bin/sys-mysql-summary

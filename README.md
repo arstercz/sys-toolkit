@@ -42,6 +42,7 @@ Table of Contents
 * [sys-mysql-block-account](#sys-mysql-block-account)
 * [sys-mysql-createdb](#sys-mysql-createdb)
 * [sys-mysql-qps](#sys-mysql-qps)
+* [sys-mysql-repl](#sys-mysql-repl)
 * [sys-mysql-set-maxconnections](#sys-mysql-set-maxconnections)
 * [sys-mysql-sql-reject](#sys-mysql-sql-reject)
 * [sys-mysql-diff](#sys-mysql-diff)
@@ -1409,6 +1410,8 @@ Enter password :
 ```
 you can use `SQL regexp` in `--search` option. use the help option to read more.
 
+[Back to TOC](#table-of-contents)
+
 sys-murmur3
 ===========
 
@@ -1420,6 +1423,47 @@ murmur Murmur3 32bit hash calculate. read more from [murmurHash](https://en.wiki
 ```
 # sys-murmur3 -s "hello world"
 2951810136
+```
+use help option to read more.
+
+[Back to TOC](#table-of-contents)
+
+sys-mysql-repl
+==============
+
+`type: perl`
+
+A simple tool for discover MySQL replication topology.
+
+`sys-mysql-repl` can get the master, slave status, common info(server_id, binlog, filter ...) and check repl health, but cann't get replication info if the master and slave have different port and give the `--host` option with slave value.
+
+### Usage
+
+the `--host` can be set both master and slave ip address:
+```
+perl sys-mysql-repl --host 10.0.21.17 --port 3303 --user monitor --askpass
+Enter password : 
++-10.0.21.17:3303
+version             5.5.36-34.1-rel34.1-log
+server_id           68839
+has_gtid            Not Support
+tx_isolation        REPEATABLE-READ
+binlog_enable       1
+filter              binlog_ignore_db: information_schema,mysql,performance_schema,test; 
+binlog_format       ROW
+max_packet          32MB
+read_only           0
+  +-10.0.21.7:3303
+  version             5.5.36-34.1-rel34.1-log
+  server_id           462055
+  has_gtid            Not Support
+  tx_isolation        REPEATABLE-READ
+  binlog_enable       1
+  filter              replicate_ignore_db: information_schema,mysql,performance_schema,test; 
+  binlog_format       ROW
+  max_packet          32MB
+  read_only           1
+  repl_check          OK
 ```
 use help option to read more.
 

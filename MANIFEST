@@ -23,6 +23,7 @@ bin/sys-mysql-block-account
 bin/sys-mysql-createdb
 bin/sys-mysql-diff
 bin/sys-mysql-error
+bin/sys-mysql-health
 bin/sys-mysql-kill-blocked-thread
 bin/sys-mysql-kill-long-query
 bin/sys-mysql-qps

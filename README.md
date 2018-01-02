@@ -40,6 +40,7 @@ Table of Contents
 * [sys-mysql-kill-blocked-thread](#sys-mysql-kill-blocked-thread)
 * [sys-mysql-kill-long-query](#sys-mysql-kill-long-query)
 * [sys-mysql-block-account](#sys-mysql-block-account)
+* [sys-mysql-health](#sys-mysql-health)
 * [sys-mysql-createdb](#sys-mysql-createdb)
 * [sys-mysql-qps](#sys-mysql-qps)
 * [sys-mysql-repl](#sys-mysql-repl)
@@ -1468,6 +1469,18 @@ read_only           0
 use help option to read more.
 
 [Back to TOC](#table-of-contents)
+
+sys-mysql-health
+================
+
+`type: perl`
+
+check the mysql health, this is forked from [MySQLTunner-perl](https://github.com/major/MySQLTuner-perl), read more from [mysql_health](https://github.com/arstercz/mysql_health).
+
+use help option to read more.
+
+[Back to TOC](#table-of-contents)
+
 
 License
 =======

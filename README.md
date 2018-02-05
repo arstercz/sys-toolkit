@@ -11,6 +11,7 @@ Table of Contents
 * [sys-nton](#sys-nton)
 * [sys-pubip](#sys-pubip)
 * [sys-ascii](#sys-ascii)
+* [sys-disk-error](#sys-disk-error)
 * [sys-ipton](#sys-ipton)
 * [sys-lock-run](#sys-lock-run)
 * [sys-swap](#sys-swap)
@@ -1481,6 +1482,36 @@ use help option to read more.
 
 [Back to TOC](#table-of-contents)
 
+sys-disk-error
+==============
+
+`type: shell`
+
+check the disk media or other count. based on Dell's `MegaCli` command.
+
+### Usage
+```
+# ./sys-disk-error   
+slot: 0
+inquiry: SEAGATE ST9600205SS
+raw_size: 572325MB
+media_error: 0
+other_error: 6
+predictive_failure: 0
+type: SAS
+firmware_state: Online
+
+slot: 2
+inquiry: SEAGATE ST9600205SS
+raw_size: 572325MB
+media_error: 12
+other_error: 6
+predictive_failure: 0
+type: SAS
+firmware_state: Online
+```
+
+[Back to TOC](#table-of-contents)
 
 License
 =======

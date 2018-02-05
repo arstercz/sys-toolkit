@@ -1487,7 +1487,8 @@ sys-disk-error
 
 `type: shell`
 
-check the disk media or other count. based on Dell's `MegaCli` command.
+check the disk media or other error count. 
+All the check are based on [Broadcom's](https://www.broadcom.com/) `MegaCli` command.
 
 ### Usage
 ```

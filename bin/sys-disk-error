@@ -1,0 +1,97 @@
+#!/bin/bash
+# Check the disk media or other error count
+# Based on Dell's MegaCli command
+# zhe.chen<chenzhe07@gmail.com>
+
+exec 2>&1
+
+if [ $# -ne 0 ]; then
+   echo "Usage: sys-disk-error"
+   exit 1;
+fi
+
+megacmd=$(which MegaCli)
+if [ ! -x $megacmd ]; then
+   echo "can not find MegaCli command or has no permission"
+   exit 1
+fi
+
+MegaCli -PDList -aALL | perl -ne '
+  BEGIN{
+    my $slot = 0;
+  }
+  if(/Slot Number: (\d+)/) {
+    $slot = $1; $slot_num{$1}{slot} = $1;
+  }
+  if(/Media Error Count: (\d+)/) {
+    $slot_num{$slot}{media_error} = $1;
+    $slot_num{$slot}{error} = 1 if $1 + 0 > 0;
+  }
+  if(/Other Error Count: (\d+)/) {
+    $slot_num{$slot}{other_error} = $1;
+    $slot_num{$slot}{error} = 1 if $1 + 0 > 0;
+  }
+  if(/Predictive Failure Count: (\d+)/) {
+    $slot_num{$slot}{predictive_failure} = $1;
+    $slot_num{$slot}{error} = 1 if $1 + 0 > 0;
+  }
+  if(/PD Type: (\w+?)$/) {
+    $slot_num{$slot}{type} = $1;
+  }
+  if(/Firmware state: (\w+?)$/) {
+    $slot_num{$slot}{firmware_state} = $1;
+  }
+  if(/Raw Size: (\w+?) /) {
+    $slot_num{$slot}{raw_size} = $1;
+  }
+  if(/Inquiry Data: (\w+\s+\w+?) /) {
+    $slot_num{$slot}{inquiry} = $1;
+  }
+  END{
+    foreach my $k (keys %slot_num) {
+      if ($slot_num{$k}{error}) {
+         foreach my $key qw(slot inquiry raw_size media_error
+                  other_error predictive_failure type firmware_state) {
+           print "$key" . ": " . $slot_num{$k}{$key} . "\n";
+         }
+         print "\n";
+      }
+    }
+  }
+'
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-disk-error - check the disk media or other count
+
+
+=head1 SYNOPSIS
+
+  Usage: sys-disk-error
+  
+  eg:
+     $ ./sys-disk-error
+     slot: 2
+     inquiry: SEAGATE ST9600205SS
+     raw_size: 572325MB
+     media_error: 12
+     other_error: 6
+     predictive_failure: 0
+     type: SAS
+     firmware_state: Online
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-disk-error 0.1.0
+
+=cut
+
+DOCUMENTATION

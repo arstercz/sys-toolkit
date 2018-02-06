@@ -4,6 +4,7 @@ README.md
 bin/sys-ascii
 bin/sys-checkport
 bin/sys-daemon
+bin/sys-disk-error
 bin/sys-diskstats
 bin/sys-dns-response-time
 bin/sys-echo-stderr

@@ -41,7 +41,9 @@ MegaCli -PDList -aALL | perl -ne '
   }
   if(/Firmware state: (\w+?)$/) {
     $slot_num{$slot}{firmware_state} = $1;
-    $slot_num{$slot}{error} = 1 if $1 ne "Online";
+    if($1 ne "Online" && $1 ne "Hotspare") {
+      $slot_num{$slot}{error} = 1 
+    }
   }
   if(/Raw Size: (\w+?) /) {
     $slot_num{$slot}{raw_size} = $1;

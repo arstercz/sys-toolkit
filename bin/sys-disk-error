@@ -1,6 +1,6 @@
 #!/bin/bash
 # Check the disk media or other error count
-# Based on Dell's MegaCli command
+# Based on Broadcom's MegaCli command
 # zhe.chen<chenzhe07@gmail.com>
 
 exec 2>&1

@@ -39,7 +39,7 @@ MegaCli -PDList -aALL -Nolog | perl -ne '
   if(/PD Type: (\w+?)$/) {
     $slot_num{$slot}{type} = $1;
   }
-  if(/Firmware state: (\w+?)$/) {
+  if(/Firmware state: (\S+?)(?:,|$)/) {
     $slot_num{$slot}{firmware_state} = $1;
     if($1 ne "Online" && $1 ne "Hotspare") {
       $slot_num{$slot}{error} = 1 

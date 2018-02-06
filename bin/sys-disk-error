@@ -16,7 +16,7 @@ if [ ! -x $megacmd ]; then
    exit 1
 fi
 
-MegaCli -PDList -aALL | perl -ne '
+MegaCli -PDList -aALL -Nolog | perl -ne '
   use v5.10.1;
   BEGIN{
     my $slot = 0;

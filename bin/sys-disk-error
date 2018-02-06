@@ -17,6 +17,7 @@ if [ ! -x $megacmd ]; then
 fi
 
 MegaCli -PDList -aALL | perl -ne '
+  use v5.10.1;
   BEGIN{
     my $slot = 0;
   }
@@ -40,6 +41,7 @@ MegaCli -PDList -aALL | perl -ne '
   }
   if(/Firmware state: (\w+?)$/) {
     $slot_num{$slot}{firmware_state} = $1;
+    $slot_num{$slot}{error} = 1 if $1 ne "Online";
   }
   if(/Raw Size: (\w+?) /) {
     $slot_num{$slot}{raw_size} = $1;
@@ -51,7 +53,7 @@ MegaCli -PDList -aALL | perl -ne '
     foreach my $k (keys %slot_num) {
       if ($slot_num{$k}{error}) {
          foreach my $key qw(slot inquiry raw_size media_error
-                  other_error predictive_failure type firmware_state) {
+             other_error predictive_failure type firmware_state) {
            print "$key" . ": " . $slot_num{$k}{$key} . "\n";
          }
          print "\n";

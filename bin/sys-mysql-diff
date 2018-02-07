@@ -132,12 +132,15 @@ my $table_ref;
 eval { $table_ref = retrieve("$table_file"); };
 my ($schema_changes, $new_db_table_ref) = $diff_object->schema_diff($table_ref);
 if ($new_db_table_ref) {
-    undef $table_ref;
+    # empty hash ref
+    $table_ref = {};
+
     foreach my $key (keys %$new_db_table_ref) {
         eval { $table_ref->{$key} = $new_db_table_ref->{$key}; };
         next if $@;
     }
 }
+
 eval { store $table_ref, "$table_file"; };
 
 push @diffs, $schema_changes;

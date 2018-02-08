@@ -1493,23 +1493,24 @@ All the check are based on [Broadcom's](https://www.broadcom.com/) `MegaCli` com
 ### Usage
 ```
 # ./sys-disk-error   
-slot: 0
-inquiry: SEAGATE ST9600205SS
-raw_size: 572325MB
-media_error: 0
-other_error: 6
-predictive_failure: 0
-type: SAS
-firmware_state: Online
+=> disk numbers: 5
+   slot: 0
+   inquiry: SEAGATE ST9600205SS
+   raw_size: 572325MB
+   media_error: 0
+   other_error: 6
+   predictive_failure: 0
+   type: SAS
+   firmware_state: Online
 
-slot: 2
-inquiry: SEAGATE ST9600205SS
-raw_size: 572325MB
-media_error: 12
-other_error: 6
-predictive_failure: 0
-type: SAS
-firmware_state: Online
+   slot: 2
+   inquiry: SEAGATE ST9600205SS
+   raw_size: 572325MB
+   media_error: 12
+   other_error: 6
+   predictive_failure: 0
+   type: SAS
+   firmware_state: Online
 ```
 
 [Back to TOC](#table-of-contents)

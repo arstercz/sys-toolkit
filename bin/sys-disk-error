@@ -20,9 +20,12 @@ MegaCli -PDList -aALL -Nolog | perl -ne '
   use v5.10.1;
   BEGIN{
     my $slot = 0;
+    my $numbers = 0;
   }
   if(/Slot Number: (\d+)/) {
-    $slot = $1; $slot_num{$1}{slot} = $1;
+    $slot = $1;
+    $slot_num{$1}{slot} = $1;
+    $numbers++;
   }
   if(/Media Error Count: (\d+)/) {
     $slot_num{$slot}{media_error} = $1;
@@ -53,11 +56,12 @@ MegaCli -PDList -aALL -Nolog | perl -ne '
   }
   END{
     my $result;
+    $result .= "=> disk numbers: $numbers\n";
     foreach my $k (keys %slot_num) {
       if ($slot_num{$k}{error}) {
          foreach my $key qw(slot inquiry raw_size media_error
              other_error predictive_failure type firmware_state) {
-           $result .= "$key" . ": " . $slot_num{$k}{$key} . "\n";
+           $result .= " " x 3 . "$key" . ": " . $slot_num{$k}{$key} . "\n";
          }
          $result .= "\n";
       }

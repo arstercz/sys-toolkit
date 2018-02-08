@@ -52,14 +52,18 @@ MegaCli -PDList -aALL -Nolog | perl -ne '
     $slot_num{$slot}{inquiry} = $1;
   }
   END{
+    my $result;
     foreach my $k (keys %slot_num) {
       if ($slot_num{$k}{error}) {
          foreach my $key qw(slot inquiry raw_size media_error
              other_error predictive_failure type firmware_state) {
-           print "$key" . ": " . $slot_num{$k}{$key} . "\n";
+           $result .= "$key" . ": " . $slot_num{$k}{$key} . "\n";
          }
-         print "\n";
+         $result .= "\n";
       }
+    }
+    if($result) {
+      print "$result";
     }
   }
 '

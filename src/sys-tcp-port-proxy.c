@@ -483,6 +483,7 @@ Options:\n\
   --remote-host=HOST   remote host\n\
   --bind-address=IP    bind address\n\
   --buffer-size=BYTES  buffer size\n\
+  --fork               fork-based concurrency\n\
   --log\n\
   --daemon\n\
   --stay-alive\n\n");

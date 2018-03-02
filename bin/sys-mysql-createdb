@@ -242,6 +242,19 @@ sub create_database {
          return 0;
       }
    }
+
+   # if not exist Binlog_Ignore_DB and Binlog_Do_DB, create database directly.
+   eval {
+      print "SQL: create database if not exists $createdb\n" if $verbose;
+      $dbh->do("create database if not exists $createdb");
+   };
+   if ($@) {
+      print "createdb error: $@";
+      return 0;
+   }
+   else {
+      return 1;
+   }
 }
 
 sub grant_user {

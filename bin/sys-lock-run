@@ -14,6 +14,9 @@ warn() {
    ts "[warn] $*" >&2
    exit 1
 }
+lockfile() {
+   echo "$1.lock-run" | tr '/' '_'
+}
 
 # check command or script exist
 exist_check() {
@@ -48,6 +51,7 @@ main() {
        exit 2;
    fi
 
+   readonly OPT_COMMAND=$1
    if ! $(exist_check $OPT_COMMAND); then
        warn "can not find $OPT_COMMAND"
    fi
@@ -58,10 +62,9 @@ main() {
       exit 2
    fi
 
-   readonly OPT_COMMAND=$1
    LOCK_DIR="/tmp"
    LOCK_FD=200
-   LOCK_FILE="$LOCK_DIR/$OPT_COMMAND.lock-run"
+   LOCK_FILE="$LOCK_DIR/$(lockfile $OPT_COMMAND)"
 
    exec_lock $LOCK_FD $LOCK_FILE $flockcmd || {
        warn "Only once can run at one time - $OPT_COMMAND"

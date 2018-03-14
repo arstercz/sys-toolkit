@@ -56,7 +56,6 @@ MegaCli -PDList -aALL -Nolog | perl -ne '
   }
   END{
     my $result;
-    $result .= "=> disk numbers: $numbers\n";
     foreach my $k (keys %slot_num) {
       if ($slot_num{$k}{error}) {
          foreach my $key qw(slot inquiry raw_size media_error
@@ -67,7 +66,11 @@ MegaCli -PDList -aALL -Nolog | perl -ne '
       }
     }
     if($result) {
+      $result = "=> disk numbers: $numbers\n" . $result;
       print "$result";
+    }
+    else {
+      print "all disks are ok!\n"
     }
   }
 '

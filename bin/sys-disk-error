@@ -73,7 +73,7 @@ MegaCli -PDList -aALL -Nolog | perl -ne '
       print "all disks are ok!\n"
     }
   }
-'
+' 2>/dev/null
 
 # Documentation
 : <<'DOCUMENTATION'

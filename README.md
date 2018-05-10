@@ -32,6 +32,7 @@ Table of Contents
 * [sys-http-stat](#sys-http-stat)
 * [sys-hosts-list](#sys-hosts-list)
 * [sys-redis-rdb-backup](#sys-redis-rdb-backup)
+* [sys-redis-log-syslog](#sys-redis-log-syslog)
 * [sys-dns-response-time](#sys-dns-response-time)
 * [sys-kill-close-wait](#sys-kill-close-wait)
 * [sys-memory-maps](#sys-memory-maps)
@@ -1514,6 +1515,28 @@ All the check are based on [Broadcom's](https://www.broadcom.com/) `MegaCli` com
 ```
 
 [Back to TOC](#table-of-contents)
+
+sys-redis-log-syslog
+====================
+
+`type: shell`
+
+extra the redis log file from last checkpoint and send warn level message to syslog server.
+
+### Usage
+```
+# ./sys-redis-log-syslog -f /opt/redis4.0/log/redis.log -p 6381 -d
+2018_05_10_18_02_11 [info] logger send ok
+
+# ./sys-redis-log-syslog -f /opt/redis4.0/log/redis.log -p 6381 -d        
+2018_05_10_18_02_13 [warn] redis log no change
+```
+
+note: you can not use -s option if your system's logger command does not support -n option. 
+use --help option to read more.
+
+[Back to TOC](#table-of-contents)
+
 
 License
 =======

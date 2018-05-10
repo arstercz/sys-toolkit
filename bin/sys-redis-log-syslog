@@ -1,0 +1,212 @@
+#!/bin/bash
+# extra the redis log file from last checkpoint to now and send
+# all [warn] message to specified syslog server.
+# cz 20180510
+
+# Redirect STDERR to STDOUT
+exec 2>&1
+
+#global function
+ts() {
+  TS=$(date +%F-%T | tr ':-' '_')
+  echo "$TS $*"
+}
+
+log() {
+  ts "[info] $*" 
+}
+
+warn() {
+  ts "[warn] $*" >&2
+  exit 1
+}
+
+# main function
+
+main() {
+  for o; do
+    case "${o}" in
+      -f)        shift; OPT_FILE="$1"; shift; ;;
+      -c)        shift; OPT_CHKF="$1"; shift; ;;
+      -p)        shift; OPT_PORT="$1"; shift; ;;
+      -s)        shift; OPT_SERV="$1"; shift; ;;
+      -d)        shift; OPT_UDP=1; ;;
+      --version) grep -A2 '^=head1 VERSION' "$0" | tail -n1; exit 0 ;;
+      --help)    perl -00 -ne 'm/^\s+Usage:/ && print' "$0"; exit 0 ;;
+      -*)        echo "Unknown option ${o}. Try --help."; exit 1; ;;
+    esac
+  done
+
+  OPT_FILE="${OPT_FILE:-/var/log/redis.log}"
+  OPT_PORT="${OPT_PORT:-6379}"
+  OPT_CHKF="${OPT_CHKF:-/tmp/redis-$OPT_PORT.logger_check}"
+  OPT_SERV="${OPT_SERV:-}"
+
+  if $(exist_file $OPT_FILE); then
+    warn "No redis log file."
+  fi
+
+  # check file
+  SIZENOW=$(stat -c %s $OPT_FILE)
+  if [ -e $OPT_CHKF ]; then
+    SIZEOLD=$(get_least_file_size $OPT_CHKF)
+    S_TAIL=$(diff_size $SIZENOW $SIZEOLD)
+    if [[ $S_TAIL -gt 0 ]]; then
+      if [[ $S_TAIL -gt 100000000 ]]; then
+        warn "redis diff log too large, size: $S_TAIL"
+      fi
+      if $(log_logger $OPT_FILE $S_TAIL $OPT_PORT $OPT_UDP $OPT_SERV) \
+           >/dev/null; then
+        log "logger send ok"
+      else
+        warn "logger send error"
+      fi
+    elif [[ $S_TAIL -eq 0 ]]; then
+      warn "redis log no change"
+    else
+      # if rotate log file, the S_TAIL maybe less than 0;
+      if $(log_logger $OPT_FILE $SIZENOW $OPT_PORT $OPT_UDP $OPT_SERV) \
+           >/dev/null; then
+        log "logger send ok"
+      else
+        warn "logger send error"
+      fi
+    fi
+
+    # update check file
+    set_least_file_size $OPT_CHKF $SIZENOW
+
+  else
+    if [[ $SIZENOW -gt 100000000 ]]; then
+      warn "redis log too large, size: $SIZENOW"
+    fi
+    if $(log_logger $OPT_FILE $SIZENOW $OPT_PORT $OPT_UDP $OPT_SERV) \
+          >/dev/null; then
+      log "logger send ok"
+    else
+      log "logger send error"
+    fi
+    set_least_file_size $OPT_CHKF $SIZENOW
+  fi
+}
+
+# read check file
+get_least_file_size() {
+  cat $1
+}
+
+# overwrite check point
+set_least_file_size() {
+  echo $2 > $1
+}
+
+# calculate diff file size
+diff_size() {
+  echo `expr $1 - $2`
+}
+
+# check file exists
+exist_file() {
+  [ "$(ls $2)" = "$2" ]
+}
+
+# check logger support --server
+logger_not_support() {
+  [ "$(logger -n 2>&1 | grep 'invalid option' >/dev/null)" ]
+}
+
+# logger to syslog
+# log_logger redis.log size port server udp
+log_logger() {
+  SERVER=$5
+  if logger_not_support; then
+    $SERVER=""
+  elif [[ "$SERVER"x = x ]]; then
+    SERVER=""
+  else
+    SERVER="-n $SERVER"
+  fi
+
+  tail -c $2 $1 | grep -P '\d{2}:\d{2}:\d{2}.\d{3} # ' | \
+    logger -t redis-$3 -p local0.notice \
+      ${4:+"-d"} $SERVER
+}
+
+# whether is source file or not
+is_not_sourced() {
+  [ "${0##*/}" = "sys-redis-log-syslog" ] || [ "${0##/}" = "bash" -a "$_" = "$0" ]
+}
+
+if is_not_sourced; then
+  OUTPUT=$(main "$@")
+  echo "${OUTPUT}"
+  exit 0
+fi
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-redis-log-syslog - extra the redis log file from last checkpoint and send to syslog server.
+
+=head1 SYNOPSIS
+
+  Usage: sys-redis-log-syslog [OPTIONS]
+  OPTION:
+      -f OPT_FILE    redis log file.
+      -c OPT_CHKF    where last check point check
+      -p OPT_PORT    redis port.
+      -s OPT_SERV    remote syslog server, if the logger in your system
+                     support --server option, you can use this option.
+      -d OPT_UDP     use UDP only, such as the logger's -d option.
+  sys-redis-log-syslog will send log to self host's syslog, and will ignore -s option if your 
+  system logger does not support -n option.  
+
+
+
+=head1 DESCRIPTION
+
+Extra the redis log file from last checkpoint to now and send
+all [warn] message to specified syslog server(if your system support).
+
+=head1 PRIVILEGES
+
+This script executes the following commands:
+
+=over
+
+=item cat
+
+  Read the file you specified or /tmp/ directories.
+
+=back
+
+=over
+
+=item echo
+
+  overwrite check point file.
+
+=back
+
+=over
+
+=item tail
+
+  tail the last diff_size from log file.
+
+=back
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-redis-log-syslog 0.1.0
+
+=cut
+
+DOCUMENTATION

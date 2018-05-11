@@ -55,23 +55,23 @@ main() {
     S_TAIL=$(diff_size $SIZENOW $SIZEOLD)
     if [[ $S_TAIL -gt 0 ]]; then
       if [[ $S_TAIL -gt 100000000 ]]; then
-        warn "the log diff size is too large, size: $S_TAIL"
+        warn "the $OPT_FILE diff size is too large, size: $S_TAIL"
       fi
       if $(log_logger $OPT_FILE $S_TAIL $OPT_TAGS $OPT_REGP $OPT_UDP $OPT_SERV) \
            >/dev/null; then
-        log "logger send ok"
+        log "$OPT_TAGS logger send ok"
       else
-        warn "logger send error"
+        warn "$OPT_TAGS logger send error"
       fi
     elif [[ $S_TAIL -eq 0 ]]; then
-      warn "the log is no change"
+      warn "$OPT_FILE is no change"
     else
       # if rotate log file, the S_TAIL maybe less than 0;
       if $(log_logger $OPT_FILE $SIZENOW $OPT_TAGS $OPT_REGP $OPT_UDP $OPT_SERV) \
            >/dev/null; then
-        log "logger send ok"
+        log "$OPT_TAGS logger send ok"
       else
-        warn "logger send error"
+        warn "$OPT_TAGS logger send error"
       fi
     fi
 
@@ -80,13 +80,13 @@ main() {
 
   else
     if [[ $SIZENOW -gt 100000000 ]]; then
-      warn "the log is too large, size: $SIZENOW"
+      warn "$OPT_FILE is too large, size: $SIZENOW"
     fi
     if $(log_logger $OPT_FILE $SIZENOW $OPT_TAGS $OPT_REGP $OPT_UDP $OPT_SERV) \
           >/dev/null; then
-      log "logger send ok"
+      log "$OPT_TAGS logger send ok"
     else
-      log "logger send error"
+      log "$OPT_TAGS logger send error"
     fi
     set_least_file_size $OPT_CHKF $SIZENOW
   fi

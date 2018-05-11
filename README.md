@@ -14,6 +14,7 @@ Table of Contents
 * [sys-disk-error](#sys-disk-error)
 * [sys-ipton](#sys-ipton)
 * [sys-lock-run](#sys-lock-run)
+* [sys-log-syslog](#sys-log-syslog)
 * [sys-swap](#sys-swap)
 * [sys-repeat](#sys-repeat)
 * [sys-daemon](#sys-daemon)
@@ -32,7 +33,6 @@ Table of Contents
 * [sys-http-stat](#sys-http-stat)
 * [sys-hosts-list](#sys-hosts-list)
 * [sys-redis-rdb-backup](#sys-redis-rdb-backup)
-* [sys-redis-log-syslog](#sys-redis-log-syslog)
 * [sys-dns-response-time](#sys-dns-response-time)
 * [sys-kill-close-wait](#sys-kill-close-wait)
 * [sys-memory-maps](#sys-memory-maps)
@@ -1516,23 +1516,25 @@ All the check are based on [Broadcom's](https://www.broadcom.com/) `MegaCli` com
 
 [Back to TOC](#table-of-contents)
 
-sys-redis-log-syslog
-====================
+sys-log-syslog
+==============
 
 `type: shell`
 
-extra the redis log file from last checkpoint and send warn level message to syslog server.
+extra the log file from last checkpoint and send needed level message to syslog server.
 
 ### Usage
 ```
-# ./sys-redis-log-syslog -f /opt/redis4.0/log/redis.log -p 6381 -d
+# send the redis log which regexp the ' # ' lines to the syslog message.
+# ./sys-log-syslog -f /opt/redis4.0/log/redis.log -t redis6381 -r '\s+#\s+' -d
 2018_05_10_18_02_11 [info] logger send ok
 
-# ./sys-redis-log-syslog -f /opt/redis4.0/log/redis.log -p 6381 -d        
+# ./sys-log-syslog -f /opt/redis4.0/log/redis.log -t redis6381 -r '\s+#\s+' -d        
 2018_05_10_18_02_13 [warn] redis log no change
 ```
 
-note: you can not use -s option if your system's logger command does not support -n option. 
+*note*: you can not use -s option if your system's logger command does not support -n option. and the -r option shuld be use Perl regular expression.
+
 use --help option to read more.
 
 [Back to TOC](#table-of-contents)

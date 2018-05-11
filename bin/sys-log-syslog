@@ -1,6 +1,6 @@
 #!/bin/bash
-# extra the redis log file from last checkpoint to now and send
-# all [warn] message to specified syslog server.
+# extra the log file from last checkpoint and send
+# all needed message to specified syslog server.
 # cz 20180510
 
 # Redirect STDERR to STDOUT
@@ -28,7 +28,8 @@ main() {
     case "${o}" in
       -f)        shift; OPT_FILE="$1"; shift; ;;
       -c)        shift; OPT_CHKF="$1"; shift; ;;
-      -p)        shift; OPT_PORT="$1"; shift; ;;
+      -r)        shift; OPT_REGP="$1"; shift; ;;
+      -t)        shift; OPT_TAGS="$1"; shift; ;;
       -s)        shift; OPT_SERV="$1"; shift; ;;
       -d)        shift; OPT_UDP=1; ;;
       --version) grep -A2 '^=head1 VERSION' "$0" | tail -n1; exit 0 ;;
@@ -37,13 +38,14 @@ main() {
     esac
   done
 
-  OPT_FILE="${OPT_FILE:-/var/log/redis.log}"
-  OPT_PORT="${OPT_PORT:-6379}"
-  OPT_CHKF="${OPT_CHKF:-/tmp/redis-$OPT_PORT.logger_check}"
+  OPT_FILE="${OPT_FILE:-log.log}"
+  OPT_TAGS="${OPT_TAGS:-log}"
+  OPT_CHKF="${OPT_CHKF:-/tmp/$OPT_TAGS.logger_check}"
+  OPT_REGP="${OPT_REGP:-(?!^$)}"
   OPT_SERV="${OPT_SERV:-}"
 
   if $(exist_file $OPT_FILE); then
-    warn "No redis log file."
+    warn "No log file."
   fi
 
   # check file
@@ -53,19 +55,19 @@ main() {
     S_TAIL=$(diff_size $SIZENOW $SIZEOLD)
     if [[ $S_TAIL -gt 0 ]]; then
       if [[ $S_TAIL -gt 100000000 ]]; then
-        warn "redis diff log too large, size: $S_TAIL"
+        warn "the log diff size is too large, size: $S_TAIL"
       fi
-      if $(log_logger $OPT_FILE $S_TAIL $OPT_PORT $OPT_UDP $OPT_SERV) \
+      if $(log_logger $OPT_FILE $S_TAIL $OPT_TAGS $OPT_REGP $OPT_UDP $OPT_SERV) \
            >/dev/null; then
         log "logger send ok"
       else
         warn "logger send error"
       fi
     elif [[ $S_TAIL -eq 0 ]]; then
-      warn "redis log no change"
+      warn "the log is no change"
     else
       # if rotate log file, the S_TAIL maybe less than 0;
-      if $(log_logger $OPT_FILE $SIZENOW $OPT_PORT $OPT_UDP $OPT_SERV) \
+      if $(log_logger $OPT_FILE $SIZENOW $OPT_TAGS $OPT_REGP $OPT_UDP $OPT_SERV) \
            >/dev/null; then
         log "logger send ok"
       else
@@ -78,9 +80,9 @@ main() {
 
   else
     if [[ $SIZENOW -gt 100000000 ]]; then
-      warn "redis log too large, size: $SIZENOW"
+      warn "the log is too large, size: $SIZENOW"
     fi
-    if $(log_logger $OPT_FILE $SIZENOW $OPT_PORT $OPT_UDP $OPT_SERV) \
+    if $(log_logger $OPT_FILE $SIZENOW $OPT_TAGS $OPT_REGP $OPT_UDP $OPT_SERV) \
           >/dev/null; then
       log "logger send ok"
     else
@@ -116,9 +118,9 @@ logger_not_support() {
 }
 
 # logger to syslog
-# log_logger redis.log size port server udp
+# log_logger logfile size tag regexp server udp
 log_logger() {
-  SERVER=$5
+  SERVER=$6
   if logger_not_support; then
     $SERVER=""
   elif [[ "$SERVER"x = x ]]; then
@@ -127,14 +129,14 @@ log_logger() {
     SERVER="-n $SERVER"
   fi
 
-  tail -c $2 $1 | grep -P '\d{2}:\d{2}:\d{2}.\d{3} # ' | \
-    logger -t redis-$3 -p local0.notice \
-      ${4:+"-d"} $SERVER
+  tail -c $2 $1 | grep -P "$4" | \
+    logger -t $3 -p local0.notice \
+      ${5:+"-d"} $SERVER
 }
 
 # whether is source file or not
 is_not_sourced() {
-  [ "${0##*/}" = "sys-redis-log-syslog" ] || [ "${0##/}" = "bash" -a "$_" = "$0" ]
+  [ "${0##*/}" = "sys-log-syslog" ] || [ "${0##/}" = "bash" -a "$_" = "$0" ]
 }
 
 if is_not_sourced; then
@@ -149,27 +151,28 @@ fi
 
 =head1 NAME
 
-sys-redis-log-syslog - extra the redis log file from last checkpoint and send to syslog server.
+sys-log-syslog - extra the log file from last checkpoint and send to syslog server.
 
 =head1 SYNOPSIS
 
-  Usage: sys-redis-log-syslog [OPTIONS]
+  Usage: sys-log-syslog [OPTIONS]
   OPTION:
-      -f OPT_FILE    redis log file.
+      -f OPT_FILE    the log file.
       -c OPT_CHKF    where last check point check
-      -p OPT_PORT    redis port.
+      -t OPT_TAGS    tag info, the same as the logger's -t option.
+      -r OPT_REGP    regexp express, must use the Perl regular expression, the same as grep -P option.
       -s OPT_SERV    remote syslog server, if the logger in your system
                      support --server option, you can use this option.
       -d OPT_UDP     use UDP only, such as the logger's -d option.
-  sys-redis-log-syslog will send log to self host's syslog, and will ignore -s option if your 
+  sys-log-syslog will send log to self host's syslog, and will ignore -s option if your 
   system logger does not support -n option.  
 
 
 
 =head1 DESCRIPTION
 
-Extra the redis log file from last checkpoint to now and send
-all [warn] message to specified syslog server(if your system support).
+Extra the log file from last checkpoint to now and send
+all needed message to specified syslog server(if your system support).
 
 =head1 PRIVILEGES
 
@@ -205,7 +208,7 @@ chenzhe07@gmail.com
 
 =head1 VERSION
 
-sys-redis-log-syslog 0.1.0
+sys-log-syslog 0.1.0
 
 =cut
 

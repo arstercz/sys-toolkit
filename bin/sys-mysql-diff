@@ -1156,7 +1156,8 @@ sub _check_for_auto_col {
     my ($table, $fields, $primary) = @_;
     my @fields = _fields_from_key($fields);
     for my $field (@fields) {
-        next if ($table->table_field($field) !~ /auto_increment/i);
+        next if ($table->table_field($field) && (
+                  $table->table_field($field) !~ /auto_increment/i));
         next if ($table->is_index($field));
         next if ($primary && $table->is_primary($field));
 

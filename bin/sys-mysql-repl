@@ -100,7 +100,7 @@ sub print_repl {
         $str .= " " x ( 2 * $level ) . "+-$host\n";
         for my $key (
             qw(version server_id has_gtid binlog_enable tx_isolation
-            filter binlog_format max_packet read_only repl_check)
+            filter binlog_format charset max_packet read_only repl_check)
           )
         {
             $str .=
@@ -794,6 +794,7 @@ sub get_common_info($) {
     $common_hash{tx_isolation}  = $self->show_variable("tx_isolation");
     $common_hash{max_packet}    =
         $self->get_max_allowed_packet() / 1024 / 1024 . 'MB';
+    $common_hash{charset}       = $self->show_variable("character_set_server");
 
     return \%common_hash;
 

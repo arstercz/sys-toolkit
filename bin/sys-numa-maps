@@ -1,0 +1,120 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-numa-maps - report the numa information about running processes
+
+=cut
+
+=head1 SYNOPSIS
+
+    use sys-numa-maps --help for more info.
+
+    options:
+       pid|p    :report on the pid process. 
+       help|h   :print help message.
+
+    read more from kernel-doc/Documentation/vm/numa_memory_policy.txt
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long;
+use POSIX qw(sysconf _SC_PAGESIZE);
+
+my $pid;
+my $heap;
+my $stack;
+my $help;
+my $uid = 0;
+
+GetOptions(
+  "pid|p=i"     => \$pid,
+  "help|h!"     => \$help,
+);
+
+if ($help) {
+  usage($0);
+}
+
+sub usage {
+  my $name = shift;
+  system("perldoc $name");
+  exit 0;
+}
+
+unless ($pid) {
+  print "must specify the --pid valuen\n";
+  exit 1;
+}
+
+sub parse_numa_maps {
+  my $pid  = shift @_;
+  my $map  = {};
+  my $numa_maps   = "/proc/$pid/numa_maps";
+
+  open my $fh, '<', $numa_maps
+       or die "open $numa_maps error: $!";
+
+  while(<$fh>) {
+    chomp;
+    next if /^$/;
+
+    my ($address, $policy, $flags) = split(/\s+/, $_, 3);
+    $map->{$address}->{'policy'} = $policy;
+    if (defined $flags) {
+      $flags =~ s/^\s+|\s+$//g if defined $flags;
+      foreach my $flag (split(/ /, $flags)) {
+        my ($key, $value) = split(/=/, $flag);
+        $map->{$address}->{'flags'}->{$key} = $value;
+      }
+    }
+  }
+  return $map;
+}
+
+# calculates the parameter passed in bytes, and then rounds 
+# it to the nearest integer
+sub hr_bytes_rnd {
+  my $num = shift;
+  if ($num >= (1024**3)) { #GB
+          return sprintf("%6.2fGB", ($num/(1024**3)));
+  } elsif ($num >= (1024**2)) { #MB
+          return sprintf("%6.2fMB", ($num/(1024**2)));
+  } elsif ($num >= 1024) { #KB
+          return sprintf("%6.2fKB", ($num/1024));
+  } else {
+          return $num."B";
+  }
+}
+
+my $map = parse_numa_maps($pid);
+my $sum = {};
+foreach my $addr (keys %$map) {
+  if(exists $map->{$addr}->{'flags'}) {
+    my $flags = $map->{$addr}->{'flags'};
+    foreach my $flag (keys %$flags) {
+      next if $flag eq 'file';
+      $sum->{$flag} += $flags->{$flag} 
+          if defined $flags->{$flag};
+    }
+  }
+}
+
+my $pagesize = sysconf(_SC_PAGESIZE);
+# print summary message
+foreach my $key (sort keys %$sum) {
+  printf("%-18s: %14i (%8s)\n", 
+         $key, $sum->{$key}, hr_bytes_rnd($sum->{$key} * $pagesize));
+}
+
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut

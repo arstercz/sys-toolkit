@@ -23,6 +23,7 @@ Table of Contents
 * [sys-php-chroot](#sys-php-chroot)
 * [sys-nginx-subdir](#sys-nginx-subdir)
 * [sys-murmur3](#sys-murmur3)
+* [sys-numa-maps](#sys-numa-maps)
 * [sys-tcp-port-proxy](#sys-tcp-port-proxy)
 * [sys-shell-type](#sys-shell-type)
 * [sys-glusterfs-rm](#sys-glusterfs-rm)
@@ -1539,6 +1540,29 @@ use --help option to read more.
 
 [Back to TOC](#table-of-contents)
 
+sys-numa-maps
+=============
+
+`type: perl`
+
+report the numa information about running processes.
+
+### Usage
+```
+# ./sys-numa-maps -p 31647
+N0                :         597833 (  2.28GB)
+N1                :         581409 (  2.22GB)
+active            :           1864 (  7.28MB)
+anon              :        1176537 (  4.49GB)
+dirty             :        1176537 (  4.49GB)
+kernelpagesize_kB :           1740 (  6.80MB)
+mapmax            :            638 (  2.49MB)
+mapped            :           2804 ( 10.95MB)
+```
+
+read more from `kernel-doc/Documentation/vm/numa_memory_policy.txt`, and use --help option to read usage message.
+
+[Back to TOC](#table-of-contents)
 
 License
 =======

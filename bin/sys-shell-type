@@ -12,7 +12,7 @@ fi
 if [ -e /proc/$$/exe ]; then
    readlinkcmd=$(which readlink)
    if [ -x $readlinkcmd ]; then
-       $readlinkcmd /proc/$$/exe
+       basename $($readlinkcmd /proc/$$/exe)
        exit 0
    fi
 fi

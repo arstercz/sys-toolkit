@@ -248,6 +248,9 @@ this can check a memcached even it's hang or timeout.
 ```
 ./sys-memcached-check -h 10.0.21.5 -p 11211   
 memcached 10.0.21.5:11211 check ok!
+
+./sys-memcached-check -6 -h fe80::222:19ff:fe54:33c5%em1 -p 11211
+memcached fe80::222:19ff:fe54:33c5%em1:11211 check ok!
 ```
 help message: $ ./sys-memcached-check --help
 

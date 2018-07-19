@@ -21,16 +21,19 @@ memcached-check - check memcached whether is alive or not
 use strict;
 use warnings;
 use IO::Socket::INET;
+use IO::Socket::INET6;
 use Getopt::Long qw(:config no_ignore_case);
 
 my $host = '127.0.0.1';
 my $port = 11211;
 my $verbose;
+my $ipv6;
 my $help;
 
 GetOptions(
     "host|h=s"   => \$host,
     "port|p=i"   => \$port,
+    "ipv6|6!"    => \$ipv6,
     "help!"      => \$help,
     "verbose|v!" => \$verbose,
 );
@@ -58,12 +61,24 @@ my %commands = (
 
 $| = 1;
 my $fail   = 0;
-my $socket = IO::Socket::INET->new(
-    PeerAddr => $host,
-    PeerPort => $port,
-    Proto    => "tcp",
-    Timeout  => 1
-) or die "unable to connect $host:$port\n";
+my $socket;
+
+if ($ipv6) {
+    $socket = IO::Socket::INET6->new(
+        PeerAddr => $host,
+        PeerPort => $port,
+        Proto    => "tcp",
+        Timeout  => 1
+    ) or die "unable to connect $host:$port\n";
+}
+else {
+    $socket = IO::Socket::INET->new(
+        PeerAddr => $host,
+        PeerPort => $port,
+        Proto    => "tcp",
+        Timeout  => 1
+    ) or die "unable to connect $host:$port\n";
+}
 
 $socket->autoflush(1);
 

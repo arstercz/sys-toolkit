@@ -18,5 +18,6 @@ WriteMakefile(
         Term::ReadKey => 0,
         Net::DNS      => 0,
         Digest::HMAC  => 0,
+        IO::Socket::INET6 => 0,
     },
 );

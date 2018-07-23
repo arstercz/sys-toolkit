@@ -1404,16 +1404,17 @@ sys-mysql-search
 
 `type: perl`
 
-search mysql metadata info, include database name, table name, column name, variable or status.
+search mysql metadata info with `REGEXP` syntax, include database name, table name, column name, variable or status.
 
 ### Usage
 ```
-# sys-mysql-search -h 10.0.21.5 -P 3301 -u root --askpass -s %count% -m t
+# sys-mysql-search -h 10.0.21.5 -P 3301 -u root --askpass -s '.*count|test' -m t
 Enter password : 
   10.0.21.5:3301
       SCHEMA: graph, TABLE: endpoint_counter, BASE TYPE: BASE TABLE
       SCHEMA: test, TABLE: count_test, BASE TYPE: BASE TABLE
-      SCHEMA: test, TABLE: pw_share_count, BASE TYPE: BASE TABLE
+      SCHEMA: test, TABLE: share_count, BASE TYPE: BASE TABLE
+      SCHEMA: test, TABLE: test_count, BASE TYPE: BASE TABLE
 ```
 you can use `SQL regexp` in `--search` option. use the help option to read more.
 

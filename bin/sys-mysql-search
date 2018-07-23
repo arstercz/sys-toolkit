@@ -11,7 +11,7 @@ Usage: [OPTION...]
 
 =head1 RISKS
 
-sys-mysql-search use LIKE syntax to search metadata info. AND will set
+sys-mysql-search use REGEXP syntax to search metadata info. AND will set
 innodb_stats_on_metadata = 0 when get metadata.
 
 =cut
@@ -194,27 +194,27 @@ my %sql_select = (
 SELECT SCHEMA_NAME AS dbname, DEFAULT_CHARACTER_SET_NAME AS dbcharset
 FROM information_schema.SCHEMATA
 WHERE SCHEMA_NAME NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys') 
-AND SCHEMA_NAME LIKE ? LIMIT 20
+AND SCHEMA_NAME REGEXP ? LIMIT 20
 SQL_END
 
     't' => <<"SQL_END",
 SELECT TABLE_SCHEMA AS dbname, TABLE_NAME AS tbname, TABLE_TYPE AS tbtype
 FROM information_schema.TABLES
 WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')
-AND TABLE_NAME LIKE ? LIMIT 20
+AND TABLE_NAME REGEXP ? LIMIT 20
 SQL_END
 
     'c' => <<"SQL_END",
 SELECT TABLE_SCHEMA AS dbname, TABLE_NAME AS tbname, COLUMN_NAME AS cname, DATA_TYPE ctype
 FROM information_schema.COLUMNS
 WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')
-AND COLUMN_NAME LIKE ? LIMIT 20
+AND COLUMN_NAME REGEXP ? LIMIT 20
 SQL_END
     'v' => <<"SQL_END",
-SHOW GLOBAL VARIABLES LIKE ?
+SHOW GLOBAL VARIABLES WHERE Variable_name REGEXP ?
 SQL_END
     's' => <<"SQL_END",
-SHOW GLOBAL STATUS LIKE ?
+SHOW GLOBAL STATUS WHERE Variable_name REGEXP ?
 SQL_END
 );
 

@@ -168,19 +168,21 @@ sub format_print {
                   . ", CHARSET: " . $ref->[1]
                   . "\n";
         }
-        if (@$ref + 0 == 3) {
-            print " " x 4
-                  . "SCHEMA: " . $ref->[0]
-                  . ", TABLE: " . $ref->[1]
-                  . ", BASE TYPE: " . $ref->[2]
-                  . "\n";
-        }
         if (@$ref + 0 == 4) {
             print " " x 4
                   . "SCHEMA: " . $ref->[0]
                   . ", TABLE: " . $ref->[1]
-                  . ", COLUMN: " . $ref->[2]
-                  . ", DATA TYPE: " . $ref->[3]
+                  . ", TABLE SIZE: " . $ref->[2]
+                  . ", BASE TYPE: " . $ref->[3]
+                  . "\n";
+        }
+        if (@$ref + 0 == 5) {
+            print " " x 4
+                  . "SCHEMA: " . $ref->[0]
+                  . ", TABLE: " . $ref->[1]
+                  . ", TABLE SIZE: " . $ref->[2]
+                  . ", COLUMN: " . $ref->[3]
+                  . ", DATA TYPE: " . $ref->[4]
                   . "\n";
         }
     }
@@ -194,25 +196,32 @@ my %sql_select = (
 SELECT SCHEMA_NAME AS dbname, DEFAULT_CHARACTER_SET_NAME AS dbcharset
 FROM information_schema.SCHEMATA
 WHERE SCHEMA_NAME NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys') 
-AND SCHEMA_NAME REGEXP ? LIMIT 20
+AND SCHEMA_NAME REGEXP ?
 SQL_END
 
     't' => <<"SQL_END",
-SELECT TABLE_SCHEMA AS dbname, TABLE_NAME AS tbname, TABLE_TYPE AS tbtype
+SELECT TABLE_SCHEMA AS dbname, TABLE_NAME AS tbname,
+CONCAT(ROUND((DATA_LENGTH + INDEX_LENGTH)/1024/1024/1024, 3), ' GB') AS tbsize,
+TABLE_TYPE AS tbtype
 FROM information_schema.TABLES
 WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')
-AND TABLE_NAME REGEXP ? LIMIT 20
+AND TABLE_NAME REGEXP ?
 SQL_END
 
     'c' => <<"SQL_END",
-SELECT TABLE_SCHEMA AS dbname, TABLE_NAME AS tbname, COLUMN_NAME AS cname, COLUMN_TYPE as ctype
-FROM information_schema.COLUMNS
-WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')
-AND COLUMN_NAME REGEXP ? LIMIT 20
+SELECT a.TABLE_SCHEMA AS dbname, a.TABLE_NAME AS tbname,
+CONCAT(ROUND((b.DATA_LENGTH + b.INDEX_LENGTH)/1024/1024/1024, 3), ' GB') AS tbsize,
+a.COLUMN_NAME AS cname, a.COLUMN_TYPE as ctype
+FROM information_schema.COLUMNS a JOIN information_schema.TABLES b
+USING (TABLE_NAME)
+WHERE a.TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')
+AND COLUMN_NAME REGEXP ?
 SQL_END
+
     'v' => <<"SQL_END",
 SHOW GLOBAL VARIABLES WHERE Variable_name REGEXP ?
 SQL_END
+
     's' => <<"SQL_END",
 SHOW GLOBAL STATUS WHERE Variable_name REGEXP ?
 SQL_END

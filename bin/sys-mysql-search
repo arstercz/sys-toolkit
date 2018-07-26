@@ -213,7 +213,7 @@ SELECT a.TABLE_SCHEMA AS dbname, a.TABLE_NAME AS tbname,
 CONCAT(ROUND((b.DATA_LENGTH + b.INDEX_LENGTH)/1024/1024/1024, 3), ' GB') AS tbsize,
 a.COLUMN_NAME AS cname, a.COLUMN_TYPE as ctype
 FROM information_schema.COLUMNS a JOIN information_schema.TABLES b
-USING (TABLE_NAME)
+ON (a.TABLE_NAME = b.TABLE_NAME AND a.TABLE_SCHEMA = b.TABLE_SCHEMA)
 WHERE a.TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')
 AND COLUMN_NAME REGEXP ?
 SQL_END

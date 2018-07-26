@@ -205,7 +205,7 @@ AND TABLE_NAME REGEXP ? LIMIT 20
 SQL_END
 
     'c' => <<"SQL_END",
-SELECT TABLE_SCHEMA AS dbname, TABLE_NAME AS tbname, COLUMN_NAME AS cname, DATA_TYPE ctype
+SELECT TABLE_SCHEMA AS dbname, TABLE_NAME AS tbname, COLUMN_NAME AS cname, COLUMN_TYPE as ctype
 FROM information_schema.COLUMNS
 WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')
 AND COLUMN_NAME REGEXP ? LIMIT 20

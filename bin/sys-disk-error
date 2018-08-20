@@ -17,7 +17,6 @@ if [ ! -x $megacmd ]; then
 fi
 
 MegaCli -PDList -aALL -Nolog | perl -ne '
-  use v5.10.1;
   BEGIN{
     my $slot = 0;
     my $numbers = 0;
@@ -58,8 +57,8 @@ MegaCli -PDList -aALL -Nolog | perl -ne '
     my $result;
     foreach my $k (keys %slot_num) {
       if ($slot_num{$k}{error}) {
-         foreach my $key qw(slot inquiry raw_size media_error
-             other_error predictive_failure type firmware_state) {
+         foreach my $key (qw(slot inquiry raw_size media_error
+             other_error predictive_failure type firmware_state)) {
            $result .= " " x 3 . "$key" . ": " . $slot_num{$k}{$key} . "\n";
          }
          $result .= "\n";

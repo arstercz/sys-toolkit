@@ -193,10 +193,10 @@ if [[ $simple -ne 1 ]]; then
 else
   if [[ $url =~ https:// ]]; then
       printf "$curr - $https_simple_template\n" | \
-          perl -ne 's/\s{2,}/, /g; print'
+          perl -lne 'chomp; s/\s{2,}/, /g; print'
   else
       printf "$curr - $http_simple_template\n" | \
-          perl -ne 's/\s{2,}/, /g; print'
+          perl -lne 'chomp; s/\s{2,}/, /g; print'
   fi
 fi
 

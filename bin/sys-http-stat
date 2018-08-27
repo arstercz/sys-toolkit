@@ -27,6 +27,9 @@ do
         '-s' | '--silent')
             continue
             ;;
+        '-Z' | '--simple')
+            simple=1
+            ;;
         -* | --*)
             args+=( "$1" )
             ;;
@@ -150,6 +153,8 @@ https_template="
                                                                                  total:${b004}
 "
 
+https_simple_template="namelookup:${b000} connect:${b001} pretransfer:${b002} starttransfer:${b003} total:${b004}"
+
 http_template="
   DNS Lookup   TCP Connection   Server Processing   Content Transfer
 [   ${a000}  |     ${a001}    |      ${a003}      |      ${a004}     ]
@@ -160,27 +165,43 @@ http_template="
                                                                  total:${b004}
 "
 
-# Print header
-cat "$head"
+http_simple_template="namelookup:${b000} connect:${b001} starttransfer:${b003} total:${b004}"
 
-# Print remote_address
-printf "website ip address: $remote_address\n"
+curr=$(date +%FT%T)
+
+if [[ $simple -ne 1 ]]; then
+  # Print header
+  cat "$head"
+
+  # Print remote_address
+  printf "website ip address: $remote_address\n"
+fi
 
 # Print body
-if [[ $HTTPSTAT_SHOW_BODY == true ]]; then
+if [[ $HTTPSTAT_SHOW_BODY == true && $simple -ne 1 ]]; then
     cat "$body"; printf '\n'
-else
+elif [[ $HTTPSTAT_SHOW_BODY == false ]]; then
     printf "Body stored in: $body\n"
 fi
 
-if [[ $url =~ https:// ]]; then
-    printf "$https_template\n"
+if [[ $simple -ne 1 ]]; then
+  if [[ $url =~ https:// ]]; then
+      printf "$https_template\n"
+  else
+      printf "$http_template\n"
+  fi
 else
-    printf "$http_template\n"
+  if [[ $url =~ https:// ]]; then
+      printf "$curr - $https_simple_template\n" | \
+          perl -ne 's/\s{2,}/, /g; print'
+  else
+      printf "$curr - $http_simple_template\n" | \
+          perl -ne 's/\s{2,}/, /g; print'
+  fi
 fi
 
 # speed, originally bytes per second
-if [[ $HTTPSTAT_SHOW_SPEED == true ]]; then
+if [[ $HTTPSTAT_SHOW_SPEED == true && $simple -ne 1 ]]; then
     printf "speed_download %.1f KiB, speed_upload %.1f KiB\n" \
         "$(calc_div $speed_download 1024)" \
         "$(calc_div $speed_upload 1024)"
@@ -205,6 +226,7 @@ sys-http-stat - bash script or command to get curl statistics made simple.
                    which are already used internally.
 
      -h --help     show help message
+     -T --simple   show the simple output
      --version     show version.
 
   Environments:

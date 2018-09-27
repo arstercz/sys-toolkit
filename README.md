@@ -36,6 +36,7 @@ Table of Contents
 * [sys-redis-rdb-backup](#sys-redis-rdb-backup)
 * [sys-dns-response-time](#sys-dns-response-time)
 * [sys-kill-close-wait](#sys-kill-close-wait)
+* [sys-mem-eat](#sys-mem-eat)
 * [sys-memory-maps](#sys-memory-maps)
 * [sys-memcached-check](#sys-memcached-check)
 * [sys-mysql-summary](#sys-mysql-summary)
@@ -1565,6 +1566,28 @@ mapped            :           2804 ( 10.95MB)
 ```
 
 read more from `kernel-doc/Documentation/vm/numa_memory_policy.txt`, and use --help option to read usage message.
+
+[Back to TOC](#table-of-contents)
+
+sys-mem-eat
+===========
+
+`type: c`
+
+simple tool to eat system memory, and it does not release the allocated memory.
+
+### Usage
+```
+# ./mem --verbose  
+[verbose] allocated max memory: 100000 MB, step size: 10
+
+[2018-09-27 19:07:06] allocated 10 MB
+[2018-09-27 19:07:08] allocated 20 MB
+[2018-09-27 19:07:10] allocated 30 MB
+[2018-09-27 19:07:12] allocated 40 MB
+```
+
+use --help option to read usage message.
 
 [Back to TOC](#table-of-contents)
 

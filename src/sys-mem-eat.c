@@ -1,3 +1,11 @@
+/*
+ a simple tool to eat system memory.
+
+RISK:
+  sys-mem-eat does not release the allocated memory.
+
+ arstercz - 20180927
+*/
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

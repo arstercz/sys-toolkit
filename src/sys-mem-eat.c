@@ -35,7 +35,7 @@ struct struct_options options;
 static struct option long_options[] = {
   { "step",    required_argument, NULL, STEP_OPTION },
   { "max",     required_argument, NULL, MAX_OPTION },
-  { "interval",required_argument, NULL, MAX_OPTION },
+  { "interval",required_argument, NULL, INTERVAL_OPTION },
   { "verbose", no_argument,       NULL, VERBOSE_OPTION},
   { "help",    no_argument,       NULL, HELP_OPTION },
   { 0, 0, 0, 0 }

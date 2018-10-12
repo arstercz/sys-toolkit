@@ -45,6 +45,10 @@ if [[ -z $url ]]; then
     exit 1
 fi
 
+# avoid the sdb_measurAccess method when curl https url, read
+# more from https://bugzilla.redhat.com/show_bug.cgi?id=1044666
+export NSS_SDB_USE_CACHE="yes"
+
 curl_format='{
 "time_namelookup": %{time_namelookup},
 "time_connect": %{time_connect},

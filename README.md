@@ -1298,7 +1298,7 @@ remote backup redis rdb file, execute `bgsave` before transfer rdb file.
 2017_06_27_14_59_40 [info] test with ssh to 10.0.21.5 ok
 -NOAUTH, maybe need redis password, use -p options
 
-# ./sys-redis-rdb-backup -h 10.0.21.5 -P 6380 -d /srv/redis_backup -p xxxxxx
+# ./sys-redis-rdb-backup -i /home/mysql/.ssh/id_rsa -h 10.0.21.5 -P 6380 -d /srv/redis_backup -p xxxxxx
 2017_06_27_14_59_49 [info] test with ssh to 10.0.21.5 ok
 2017_06_27_14_59_52 [info] start at 20170627145949
 receiving incremental file list

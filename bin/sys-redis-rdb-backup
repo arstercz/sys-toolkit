@@ -27,6 +27,7 @@ for o; do
          -h)          shift; OPT_HOST="$1"; shift; ;;
          -P)          shift; OPT_PORT="$1"; shift; ;;
          -p)          shift; OPT_PASS="$1"; shift; ;;
+         -i)          shift; OPT_KEY="$1"; shift; ;;
          --version)   grep -A2 '^=head1 VERSION' "$0" | tail -n1; exit 0 ;;
          --help)      perl -00 -ne 'm/^  Usage:/ && print' "$0"; exit 0 ;;
          -*)          echo "Unknown option ${o}. Try --help."; exit 1; ;;
@@ -43,11 +44,12 @@ fi
 export redis_host="${OPT_HOST:-127.0.0.1}"
 export redis_port="${OPT_PORT:-6379}"
 export redis_pass="$OPT_PASS"
+export ssh_key="${OPT_KEY:-~/.ssh/id_rsa}"
 
 ssh_test() {
-  [ "$(ssh -n -o PreferredAuthentications=publickey,gssapi-with-mic,gssapi-keyex \
+  [ "$(ssh -i $1 -n -o PreferredAuthentications=publickey,gssapi-with-mic,gssapi-keyex \
      -o ConnectTimeout=3 -o GSSAPIAuthentication=no \
-     $1 '/bin/echo 2' 2>/dev/null)" = 2 ] 
+     $2 '/bin/echo 2' 2>/dev/null)" = 2 ] 
 }
 
 get_redis_info() {
@@ -57,7 +59,7 @@ get_redis_info() {
       use IO::Socket::INET;
       use Data::Dumper;
       
-      my $n = 10; # try 10 times to check status.
+      my $n = 15; # try 15 times to check status.
       my $now  = time(); # current time in seconds.
       my $host = $ENV{redis_host};
       my $port = $ENV{redis_port};
@@ -161,7 +163,7 @@ get_redis_info() {
 }
 
 # ssh test
-if ! $(ssh_test $redis_host); then
+if ! $(ssh_test $ssh_key $redis_host); then
    warn "cann't ssh to $redis_host"
 else 
    log "test with ssh to $redis_host ok"
@@ -175,7 +177,7 @@ do
   log "start at $STRING"
   BAK_F="$redis_host-$redis_port-$STRING.rdb"
   if [[ $S = 'ok' ]]; then
-     rsync -e "ssh" -azvt $redis_host:$F $backup_dir/$BAK_F
+     rsync -e "ssh -i $ssh_key" -azvt $redis_host:$F $backup_dir/$BAK_F
      if [ $? = 0 ]; then
         log "$redis_host:$redis_port backup to $backup_dir/$BAK_F ok"
         exit 0

@@ -33,6 +33,7 @@ Table of Contents
 * [sys-http-code](#sys-http-code)
 * [sys-http-stat](#sys-http-stat)
 * [sys-hosts-list](#sys-hosts-list)
+* [sys-qtunnel-manage](#sys-qtunnel-manage)
 * [sys-redis-rdb-backup](#sys-redis-rdb-backup)
 * [sys-dns-response-time](#sys-dns-response-time)
 * [sys-kill-close-wait](#sys-kill-close-wait)
@@ -1588,6 +1589,36 @@ simple tool to eat system memory, and it does not release the allocated memory.
 ```
 
 use --help option to read usage message.
+
+[Back to TOC](#table-of-contents)
+
+sys-qtunnel-manage
+==================
+
+`type: shell`
+
+manage the [qtunnel](https://github.com/arstercz/qtunnel) by the configure file.
+
+### Usage
+
+```
+$ sys-qtunnel-manage -l
+ All tags in config file: /etc/conn.conf:     
+      server1 - mode: server;       10.0.21.5:16380 --> 10.0.21.7:6380       
+      server2 - mode: server;       10.0.21.5:13310 --> 10.0.21.7:3310   
+
+$ sys-qtunnel-manage -r 
+ Already running tags:
+      10844 -> server1
+      10898 -> server2
+
+$ sys-qtunnel-manage -t server1 -k
+  2018_09_01_09_42_56 [info] kill the qtunnel with tag server1 ok
+
+$ sys-qtunnel-manage -r           
+  Already running tags:
+      10898 -> server2
+```
 
 [Back to TOC](#table-of-contents)
 

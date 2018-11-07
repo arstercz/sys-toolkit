@@ -1,0 +1,288 @@
+#!/bin/bash
+# only used for manage qtunnel through the config file.
+# arstercz 20180831
+
+# Redirect STDERR to STDOUT
+exec 2>&1
+
+#global function
+ts() {
+  TS=$(date +%F-%T | tr ':-' '_')
+  echo "$TS $*"
+}
+
+log() {
+  ts "[info] $*" 
+}
+
+warn() {
+  ts "[warn] $*" >&2
+  exit 1
+}
+
+[[ "$TRACE" ]] && set -x
+
+while (($# >0))
+do
+  case "$1" in
+      -h | --help)
+        perl -00 -ne 'm/^\s+Usage:/ && print' "$0"
+        exit 1
+        ;;
+      -a | --all)
+        is_all=1
+        ;;
+      -l | --list)
+        is_list=1
+        ;;
+      -k | --kill)
+        is_kill=1
+        ;;
+      -s | --start)
+        is_start=1
+        ;;
+      -t | --tag)
+        shift
+        tag="$1"
+        ;;
+      -r | --run)
+        is_run=1
+        ;;
+      -c | --conf)
+        shift
+        conf="$1"
+        ;;
+      *)
+        echo "Unknown option $1 . try --help."
+        exit 1
+        ;;
+  esac
+  shift
+done
+
+conf="${conf:-/etc/conn.conf}"
+is_all="${is_all:-0}"
+
+if [[ $is_kill -ne 1 ]]; then
+  is_start=1
+fi
+
+export CONFIGQ=$conf
+
+# check qtunnel command
+check_command() {
+  qtunnelcmd=$(which qtunnel 2>/dev/null)
+  if [ ! -x "$qtunnelcmd" ]; then
+    log "can not find or execute qtunnel command!"
+    return 1
+  fi
+  return 0
+}
+
+# list tags
+list_tags() {
+  # list all tag
+
+  cat $1 | \
+    perl -ne '
+      chomp;
+      if(/\[.+\]/) {
+        s/(?:\[|\])//g;
+        $n{$_}{tag} = $_;
+        $tag = $_;
+      }; 
+      if(/faddr/) {
+        s/^\s*faddr\s*=\s*//g;
+        $n{$tag}{faddr} = $_ if $tag;
+      }
+      if(/baddr/) {
+        s/^\s*baddr\s*=\s*//g;
+        $n{$tag}{baddr} = $_ if $tag;
+      }
+      if(/clientmode/) {
+        s/^\s*clientmode\s*=\s*//g;
+        $n{$tag}{mode} = $_ eq "false" ? "server" : "client";
+        undef $tag;
+      }
+
+      END{
+        print " All tags in config file: $ENV{CONFIGQ}:\n";
+        foreach my $k (sort keys %n) {
+          my $faddr = $n{$k}{faddr};
+          my $baddr = $n{$k}{baddr};
+          my $mode  = $n{$k}{mode};
+          printf "%18s - mode: %6s; %21s --> %-21s\n", 
+                 $k, $mode, $faddr, $baddr; 
+        }
+      }
+   '
+}
+
+list_run() {
+   # list running tag
+   pid_list=$(pidof qtunnel)
+   [ -z "$pid_list" ] && echo " No tags running" && return 0
+   ps -o pid -o command -p $pid_list | perl -ne '
+     chomp;
+     if(/^\s*(\d+?)\s+/) {
+       my $pid = $1;
+       if(/-tag\s+(.+)$/) {
+         push @a, "$pid -> $1";
+       }
+       else {
+         push @a, "$pid -> all tags";
+       } 
+     }
+     END {
+       print " Already running tags:\n";
+       foreach (@a) {
+         printf "%25s\n", $_;
+       }
+     }
+   '
+}
+
+# start qtunnel
+exec_qtunnel() {
+  conf="$1"
+  tag="$2"
+  if [ -n "$tag" ]; then
+    qtunnel -conf $conf -daemon -logto syslog -tag $tag &&{
+        pid=$(get_pid $tag)
+        log "start qtunnel with tag $tag ok. - pid: $pid" 
+      } || {
+        log "start qtunnel with tag $tag error!"
+      }
+  fi
+}
+
+get_pid() {
+  export Qtag=$1
+  pid_list=$(pidof qtunnel)
+  [ -z "$pid_list" ] && return 0
+  ps -o pid -o command -p $pid_list | perl -ne '
+    if(/^\s*(\d+?)\s+/) {
+      my $pid = $1;
+      if(/-tag\s+(.+)$/) {
+        if(exists $ENV{Qtag}) {
+          do { print $pid; last; } if $1 eq $ENV{Qtag};
+        }
+      }
+      else {
+        print "$pid\n";
+        last;
+      }
+    }
+  '
+}
+
+kill_qtunnel() {
+  tag=$1
+  pid_list=$(pidof qtunnel)
+  [ -z "$pid_list" ] && echo " No tags running" && return 0
+  [ -n "$tag" ] && {
+    pid=$(get_pid $tag)
+    [[ "$pid" ]] && {
+      kill $pid && log "kill the qtunnel with tag $tag ok" || {
+        log "kill the qtunnel with tag $tag error!"
+      }
+    }
+  } || {
+    pid=$(get_pid)
+    [[ "$pid" ]] && {
+      kill $pid && log "kill the qtunnel $pid ok" || {
+        log "kill the qtunnel $pid error!"
+      }
+    }
+  }
+}
+
+
+check_command || exit 1;
+
+[[ $is_list -eq 1 ]] && {
+  list_tags $conf
+  exit 0;
+}
+
+[[ $is_run -eq 1 ]] && {
+  list_run
+  exit 0;
+}
+
+[[ $is_all -eq 1 ]] && [[ $is_kill -ne 1 ]] && {
+  perl -ne 'chomp; print $1 . "\n" if /\[(.+?)\]/' $conf | \
+  while read TAG
+  do
+    exec_qtunnel $conf $TAG
+  done
+}
+
+if [[ $is_all -ne 1 ]] && [ -z $tag ]; then
+  warn "need tag info!"
+fi
+
+[[ $is_start -eq 1 ]] && {
+  pid=$(get_pid $tag)
+  [ -n "$pid" ] && {
+     log "already start qtunnel with $tag: pid $pid"
+     exit 0
+  }
+  exec_qtunnel $conf $tag    
+}
+
+[[ $is_kill -eq 1 ]] && {
+  [ -n "$tag" ] && kill_qtunnel $tag || kill_qtunnel
+}
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-qrunnel-manage - manage the qtunnel through the configure file
+
+=head1 SYNOPSIS
+
+  Usage: sys-qtunnel-manage [option]
+  options:
+    -c | --conf:    path of the qtunnel conf option. default is /etc/conn.conf.
+    -a | --all:     whether start all qtunnel tags or not.
+    -t | --tag:     the section tag in configure file.
+    -l | --list:    list all tags in configure file.
+    -r | --run:     list only running tags.
+    -s | --start:   whether start qtunnel or not.
+    -k | --kill:    whether stop qtunnel or not.
+    -h | --help:    print help message
+  
+  eg:
+     $ sys-qtunnel-manage -l
+      All tags in config file: /etc/conn.conf:     
+           server1 - mode: server;       10.0.21.5:16380 --> 10.0.21.7:6380       
+           server2 - mode: server;       10.0.21.5:13310 --> 10.0.21.7:3310   
+ 
+     $ sys-qtunnel-manage -r 
+      Already running tags:
+           10844 -> server1
+           10898 -> server2
+ 
+     $ sys-qtunnel-manage -t server1 -k
+       2018_09_01_09_42_56 [info] kill the qtunnel with tag server1 ok
+ 
+     $ sys-qtunnel-manage -r           
+       Already running tags:
+           10898 -> server2
+ 
+
+=head1 AUTHOR
+
+arstercz@gmail.com
+
+=head1 VERSION
+
+sys-qtunnel-manage 0.1.0
+
+=cut
+
+DOCUMENTATION

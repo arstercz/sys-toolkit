@@ -1,0 +1,136 @@
+#!/bin/bash
+# capture memcached traffic and parse to get item list
+# arstercz  2018-12-11
+
+[[ "$TRACE" ]] && set -x
+
+# main function
+main() {
+  for o; do
+    case "${o}" in
+      -p)    shift; OPT_PORT="$1"; shift; ;;
+      -i)    shift; OPT_INET="$1"; shift; ;;
+      -d)    shift; OPT_DIR="$1"; shift; ;;
+      -h)    perl -00 -ne 'm/^\s+Usage:/ && print' "$0"; exit 0; ;;
+      -*)    echo "Unknown option $1 . try --help."; exit 1; ;;
+    esac
+  done
+
+  OPT_PORT="${OPT_PORT:-11211}"
+  OPT_INET="${OPT_INET:-any}"
+  OPT_DIR="${OPT_DIR:=/tmp}"
+
+  CMD_TCPDUMP="${CMD_TCPDUMP:-"$(_which tcpdump)"}"
+  if [ "$CMD_TCPDUMP"x == "x" ]; then
+    echo "can not find tcpdump command!"
+    exit 1
+  fi
+
+  echo "- start tcpdump ..."
+  echo "- use 'Crtl+c' to stop!"
+
+  TS=$(date +%F-%T | tr ':-' '_')
+  # only capture data length greater than 0.
+  start_command "$CMD_TCPDUMP -nn -i $OPT_INET -A -s 65535 \
+                -w $OPT_DIR/$TS-$OPT_PORT-memcached.pcap -U \
+                \"dst port $OPT_PORT and \
+                 (((ip[2:2] - ((ip[0]&0xf)<<2)) - ((tcp[12]&0xf0)>>2)) != 0)\""
+
+  trap onexit INT
+  wait $pids
+}
+
+_which() {
+  if [ -x /usr/bin/which ]; then 
+    /usr/bin/which "$1" 2>/dev/null | awk '{print $1}'
+  elif which which 1>/dev/null 2>&1; then 
+    which "$1" 2>/dev/null | awk '{print $1}'
+  else 
+    echo "$1"
+  fi   
+}
+
+store_pid() {
+  pids="$pids $1"
+}
+
+start_command() {
+  bash -c "$1" 2>&1 &
+  pid="$(jobs -p %%)"
+  store_pid "$pid"
+}
+
+onexit() {
+  echo "- SIGINT received, kill tcpdum..."
+  kill $pids
+  sleep 1
+
+  echo "- parse the traffic file $OPT_DIR/$OPT_PORT-memcached.pcap..."
+  $CMD_TCPDUMP -A -nn -tttt -r $OPT_DIR/$TS-$OPT_PORT-memcached.pcap 2>/dev/null | perl -ne '
+      BEGIN { my $prev;} 
+      if(/.{8}((?:get|gets|set|delete|add|replace|append|
+     	 prepend|cas|incr|decr|touch|gat|gats|slab|lru).+)/x) {
+  
+       $prev && print "  $prev - $1\n"; 
+   	   undef $prev;
+      } 
+      if(/^(\d+-\d+-\d+\s\d+:\d+:\d+\.\d+)/) {
+        my $k = $1; 
+        $prev = $k
+      }
+  '
+}
+
+is_not_sourced() {
+  [ "${0##*/}" = "sys-memcached-capture" ] || [ "${0##/}" = "bash" -a "$_" = "$0" ]
+}
+
+if is_not_sourced; then
+  main "$@"
+fi
+
+# Documentation
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-memcached-capture - capture the memcached traffic and parse the item list.
+
+=head1 SYNOPSIS
+
+  Usage: sys-memcached-capture [OPTIONS]
+  OPTION:
+      -p OPT_PORT    memcached port, default is 11211.
+      -i OPT_INET    interface that memcached listend, default is any.
+      -d OPT_DIR     the directory that can store the tcpdump file, default is /tmp.
+      -h OPT_HELP    print help message
+  sys-memcached-capture must use the tcpdump command.
+
+=head1 DESCRIPTION
+
+capture the memcached traffic and parse the item list.
+
+=head1 PRIVILEGES
+
+This script executes the following commands:
+
+=over
+
+=item tcpdump
+
+  capture the traffic and parse traffic
+
+=back
+
+=head1 AUTHOR
+
+chenzhe07@gmail.com
+
+=head1 VERSION
+
+sys-memcached-capture 0.1.0
+
+=cut
+
+DOCUMENTATION

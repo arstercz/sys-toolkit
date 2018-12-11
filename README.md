@@ -1620,6 +1620,8 @@ $ sys-qtunnel-manage -r
       10898 -> server2
 ```
 
+use `-h` option for more usage message.
+
 [Back to TOC](#table-of-contents)
 
 License

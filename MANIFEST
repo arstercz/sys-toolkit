@@ -20,6 +20,8 @@ bin/sys-lock-run
 bin/sys-log-syslog
 bin/sys-memory-maps
 bin/sys-mem-redis-summary
+bin/sys-memcached-check
+bin/sys-memcached-capture
 bin/sys-mysql-adj
 bin/sys-mysql-block-account
 bin/sys-mysql-createdb

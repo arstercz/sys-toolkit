@@ -40,6 +40,7 @@ Table of Contents
 * [sys-mem-eat](#sys-mem-eat)
 * [sys-memory-maps](#sys-memory-maps)
 * [sys-memcached-check](#sys-memcached-check)
+* [sys-memcached-capture](#sys-memcached-capture)
 * [sys-mysql-summary](#sys-mysql-summary)
 * [sys-mysql-adj](#sys-mysql-adj)
 * [sys-mysql-kill-blocked-thread](#sys-mysql-kill-blocked-thread)
@@ -1620,6 +1621,33 @@ $ sys-qtunnel-manage -r
       10898 -> server2
 ```
 
+use `-h` option for more usage message.
+
+[Back to TOC](#table-of-contents)
+
+sys-memcached-capture
+=====================
+
+`type: shell`
+
+capture memcached traffic and parsed to get item list.
+
+### Usage
+```
+$ sys-memcached-capture -p 11212 -i 
+- start tcpdump ...
+- use 'Crtl+c' to stop!
+tcpdump: listening on any, link-type LINUX_SLL (Linux cooked), capture size 65535 bytes
+^C5 packets captured
+10 packets received by filter
+0 packets dropped by kernel
+- SIGINT received, kill tcpdum...
+- parse the traffic file /tmp/2018_12_11_12_07_22-11212-memcached.pcap...
+  2018-12-10 12:02:58.950259 - get tags
+  2018-12-10 12:03:04.910211 - set msg 0 0 3
+  2018-12-10 12:03:10.103213 - get msg
+  2018-12-10 12:03:13.430215 - delete msg
+```
 use `-h` option for more usage message.
 
 [Back to TOC](#table-of-contents)

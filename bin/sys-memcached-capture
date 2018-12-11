@@ -65,7 +65,7 @@ onexit() {
   kill $pids
   sleep 1
 
-  echo "- parse the traffic file $OPT_DIR/$OPT_PORT-memcached.pcap..."
+  echo "- parse the traffic file $OPT_DIR/$TS-$OPT_PORT-memcached.pcap..."
   $CMD_TCPDUMP -A -nn -tttt -r $OPT_DIR/$TS-$OPT_PORT-memcached.pcap 2>/dev/null | perl -ne '
       BEGIN { my $prev;} 
       if(/.{8}((?:get|gets|set|delete|add|replace|append|

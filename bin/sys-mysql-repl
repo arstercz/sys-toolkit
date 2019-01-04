@@ -189,7 +189,7 @@ if ( $master_host ) {
     );
 }
 else {
-    print "Can't find top master, maybe multi master in your env:\n";
+    print "there is no top master, maybe multi master:\n";
     foreach my $hostlist ( keys %host_find ) {
         my ( $h, $p ) = split( /:/, $hostlist, 2 );
         my $dbhelper =
@@ -197,8 +197,21 @@ else {
             'mysql' );
         my $dbinfo = $dbhelper->get_common_info();
         $dbinfo->{filter} = $dbhelper->get_master_filter();
-        $dbinfo->{server} = "$h:$p";
-        print Data::Dumper->Dump( [$dbinfo], [qw($hostlist)] );
+        $dbinfo->{host} = "$h:$p";
+        my $str = "+-";
+        for my $key (
+            qw(host version server_id has_gtid binlog_enable
+              filter binlog_format max_packet read_only
+              repl_check databases status)
+          )
+        {
+            my $space = $key eq "host" ? " " : " " x 3;
+            $str .=
+              $space
+              . sprintf( "%-20s%s\n", $key, $dbinfo->{$key} )
+              if defined $dbinfo->{$key};
+        }
+        print "$str";
     }
 }
 
@@ -549,6 +562,8 @@ use constant Is_Readonly_SQL  => "SELECT \@\@global.read_only As Value";
 use constant Has_Gtid_SQL     => "SELECT \@\@global.gtid_mode As Value";
 use constant Get_ServerID_SQL => "SELECT \@\@global.server_id As Value";
 use constant Get_Version_SQL  => "SELECT VERSION() AS Value";
+use constant Get_Database_SQL => "SELECT GROUP_CONCAT(SCHEMA_NAME) AS DBS FROM information_schema.SCHEMATA
+WHERE SCHEMA_NAME NOT IN('mysql','test','information_schema','performance_schema')";
 
 sub new {
     my ( $class, %args ) = @_;
@@ -630,6 +645,21 @@ sub get_server_id($) {
 sub get_max_allowed_packet($) {
     my $self = shift;
     return $self->get_variable(Get_MaxAllowedPacket_SQL);
+}
+
+sub get_database_list {
+    my $self = shift;
+    my $str  = "";
+    my ($query, $sth, $href);
+    $query = Get_Database_SQL;
+    $sth   = $self->{dbh}->prepare($query);
+    my $ret = $sth->execute();
+    return if ( !defined($ret) || $ret != 1 );
+    $href = $sth->fetchrow_hashref;
+    if( defined $href->{DBS} && length($href->{DBS}) > 0 ) {
+       $str .= sprintf("%s;", $href->{DBS});
+    }
+    return $str;
 }
 
 sub get_master_filter($) {
@@ -781,6 +811,7 @@ sub get_common_info($) {
     $common_hash{server_id} = $self->get_server_id();
     $common_hash{version}   = $self->get_version();
     $common_hash{read_only} = $self->is_read_only();
+    $common_hash{databases} = $self->get_database_list();
     $common_hash{has_gtid}  = do {
         if ( $common_hash{version} =~ m/5.6/ ) {
             $self->has_gtid();

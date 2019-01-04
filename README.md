@@ -1444,7 +1444,7 @@ sys-mysql-repl
 
 `type: perl`
 
-A simple tool for discover MySQL replication topology.
+A simple tool for discover MySQL replication topology, also support master-master topology.
 
 `sys-mysql-repl` can get the master, slave status, common info(server_id, binlog, filter ...) and check repl health, but cann't get replication info if the master and slave have different port and give the `--host` option with slave value.
 

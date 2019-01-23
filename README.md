@@ -1668,7 +1668,7 @@ aligns output from other tools to columns.
 
 # vmstat | tail -2 | sys-align
    r b swpd    free buff   cache si so bi bo in cs us sy  id wa st
-    1 0    0 5585928    0 2459304  0  0  0  1  0  0  0  0 100  0  0
+   1 0    0 5585928    0 2459304  0  0  0  1  0  0  0  0 100  0  0
 ```
 use `--help` option for more usage message.
 

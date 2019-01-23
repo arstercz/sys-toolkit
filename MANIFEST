@@ -1,6 +1,7 @@
 INSTALL.md
 Makefile.PL
 README.md
+bin/sys-align
 bin/sys-ascii
 bin/sys-checkport
 bin/sys-daemon

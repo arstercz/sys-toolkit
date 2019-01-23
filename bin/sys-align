@@ -1,0 +1,93 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-align - aligns output from other tools to columns.
+
+=cut
+
+=head1 SYNOPSIS
+
+    use sys-align --help for more info. if no files are specified STDIN is read,
+
+    options:
+       file|f : read from file.
+       help|h : help message.
+
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long;
+use List::Util qw(max);
+use Data::Dumper;
+
+my $file;
+my $help;
+
+GetOptions(
+  "file|f=s"  => \$file,
+  "help|h!"   => \$help,
+);
+
+if ($help) {
+  usage($0);
+}
+
+sub usage {
+  my $name = shift;
+  system("perldoc $name");
+  exit 0;
+}
+
+my $fh;
+if ($file) {
+  open $fh, '<', $file 
+    or die "open $file error";
+}
+else {
+  $fh = *STDIN;
+}
+
+my @lines;
+my %word_count;
+
+while (<$fh>) {
+  my $line = $_;
+  my @words = split(/\s+/, $line);
+
+  push @lines, \@words;
+  $word_count{ scalar @words }++;
+}
+
+# find max number of the words per line
+my @r_words  = reverse sort { 
+                 $word_count{$a} <=> $word_count{$b}
+               } keys %word_count;
+my $num_words = $r_words[0];
+
+# Filter out non-conformists
+@lines = grep { @$_ + 0 == $num_words } @lines;
+die "need at least 2 lines" if @lines < 2;
+
+my @formats;
+foreach my $k (0 .. $num_words - 1) {
+  my $len = max(map {length($_->[$k])} @lines);
+  my $fmt = $lines[1]->[$k] =~ m/[^0-9.-]/
+          ? "%-${len}s" : "%${len}s";
+
+  push @formats, $fmt;
+}
+
+my $format = join(" ", @formats) . "\n";
+printf $format, @$_ foreach (@lines);
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut

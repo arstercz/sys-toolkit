@@ -10,6 +10,7 @@ Table of Contents
 * [sys-genpass](#sys-genpass)
 * [sys-nton](#sys-nton)
 * [sys-pubip](#sys-pubip)
+* [sys-align](#sys-align)
 * [sys-ascii](#sys-ascii)
 * [sys-disk-error](#sys-disk-error)
 * [sys-ipton](#sys-ipton)
@@ -1649,6 +1650,27 @@ tcpdump: listening on any, link-type LINUX_SLL (Linux cooked), capture size 6553
   2018-12-10 12:03:13.430215 - delete msg
 ```
 use `-h` option for more usage message.
+
+[Back to TOC](#table-of-contents)
+
+sys-align
+=========
+
+`type: perl`
+
+aligns output from other tools to columns.
+
+### Usage
+```
+# vmstat | tail -2              
+ r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
+  0  0      0 5588044      0 2459224    0    0     0     1    0    0  0  0 100  0  0
+
+# vmstat | tail -2 | sys-align
+   r b swpd    free buff   cache si so bi bo in cs us sy  id wa st
+    1 0    0 5585928    0 2459304  0  0  0  1  0  0  0  0 100  0  0
+```
+use `--help` option for more usage message.
 
 [Back to TOC](#table-of-contents)
 

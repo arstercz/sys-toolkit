@@ -9,8 +9,8 @@ bin/sys-disk-error
 bin/sys-diskstats
 bin/sys-dns-response-time
 bin/sys-echo-stderr
+bin/sys-easyhosts
 bin/sys-genpass
-bin/sys-hosts-list
 bin/sys-http-code
 bin/sys-http-stat
 bin/sys-gluster-rm

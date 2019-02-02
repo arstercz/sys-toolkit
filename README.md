@@ -13,6 +13,7 @@ Table of Contents
 * [sys-align](#sys-align)
 * [sys-ascii](#sys-ascii)
 * [sys-disk-error](#sys-disk-error)
+* [sys-easyhosts](#sys-easyhosts)
 * [sys-ipton](#sys-ipton)
 * [sys-lock-run](#sys-lock-run)
 * [sys-log-syslog](#sys-log-syslog)
@@ -33,7 +34,6 @@ Table of Contents
 * [sys-diskstats](#sys-diskstats)
 * [sys-http-code](#sys-http-code)
 * [sys-http-stat](#sys-http-stat)
-* [sys-hosts-list](#sys-hosts-list)
 * [sys-qtunnel-manage](#sys-qtunnel-manage)
 * [sys-redis-rdb-backup](#sys-redis-rdb-backup)
 * [sys-dns-response-time](#sys-dns-response-time)
@@ -939,33 +939,54 @@ help message: ./sys-http-code -h
 
 [Back to TOC](#table-of-contents)
 
-sys-hosts-list
+sys-easyhosts
 ==============
 
-`type: shell`
+`type: perl`
 
-Output the ip or host for the file: /etc/hosts
+managing your /etc/hosts file.
 
 #### Usage
 
 ```
-# output ip list
-./sys-hosts-list ip
-   10.3.254.2
-   10.3.254.3
-   127.0.0.1
-   ::1
+$ sys-easyhosts -m list
+localhost               => 127.0.0.1        (on)
+localhost               => ::1              (on)
+localhost.localdomain   => 127.0.0.1        (on)
+localhost.localdomain   => ::1              (on)
+localhost4              => 127.0.0.1        (on)
+localhost4.localdomain4 => 127.0.0.1        (on)
+localhost6              => ::1              (on)
+localhost6.localdomain6 => ::1              (on)
 
-# output host list
-./sys-hosts-list host
-   localhost
-   localhost.localdomain
-   localhost4
-   z2.com
-   z3
+# check domain
+$ sys-easyhosts -m has google.com
+google.com not found in hosts file
+
+# add domain
+$ sys-easyhosts -m add google.com 172.217.8.14
+ok - [add] google.com 172.217.8.14
+
+# new list in /etc/hosts
+$ cat /etc/hosts
+127.0.0.1 localhost.localdomain localhost4.localdomain4 localhost4 localhost 
+172.217.8.14 google.com 
+::1 localhost6.localdomain6 localhost.localdomain localhost6 localhost 
+
+# disable doamain list
+$ sys-easyhosts -m off google.com             
+ok - [off] google.com
+
+$ cat /etc/hosts
+127.0.0.1 localhost4.localdomain4 localhost.localdomain localhost4 localhost 
+# 172.217.8.14 google.com 
+::1 localhost6.localdomain6 localhost.localdomain localhost6 localhost 
 ```
 
-help message: ./sys-hosts-list [ip|host]
+use `--help` option for more usage message, ipv4 and ipv6 are both support.
+
+mode must set `list, fix, add, aff, on, off, del, has`. and the domain value is `$ARGV[0]`(google.com), ip value is `$ARGV[1]`(172.217.8.14), all mode support `dryrun`
+ that only print result, don't change hosts file. 
 
 [Back to TOC](#table-of-contents)
 

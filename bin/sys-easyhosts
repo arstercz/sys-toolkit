@@ -1,0 +1,552 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-easyhosts - managing your /etc/hosts file
+
+=head1 SYNOPSIS
+
+Usage: [OPTION...]
+
+=head1 RISKS
+
+sys-easyhosts will change hosts file.
+
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long;
+use File::Copy;
+use vars qw($ERROR $ERRNO);
+use List::Util qw(max);
+
+my $file = '/etc/hosts';
+my $mode = 'list';
+my $backup;
+my $verbose;
+my $dryrun;
+my $help;
+
+GetOptions(
+  "file|f=s"  => \$file,
+  "mode|m=s"  => \$mode,
+  "backup|b!" => \$backup,
+  "verbose|v!"=> \$verbose,
+  "dryrun|r!" => \$dryrun,
+  "help|h!"   => \$help,
+);
+
+if ($help) {
+  usage($0);
+}
+
+sub usage {
+  my $name = shift;
+  system("perldoc -T $name");
+  exit 0;
+}
+
+sub host_read {
+  my $file = shift or die "You did not specify a file name";
+
+  local $/ = undef;
+  open my $fh, '<', $file or die "Failed to open file '$file': $!";
+  my $content = <$fh>;
+  close $fh;
+  
+  return read_string($content);
+}
+
+sub read_string {
+  my $content = shift;
+  return undef unless defined $content;
+
+  # parse the file
+  my $list;
+
+  foreach (split /(?:\015{1,2}\012|\015|\012)/, $content) {
+    next if /^$/;
+    s/$1// if /.+(#{1,}.+)/;
+
+    my $on = 1;
+    if (/\s*#{0,}\s*(\S+)\s+(.+)$/) {
+      my $ip = $1;
+      my $domains = $2;
+
+      unless ((is_ipv4($ip) or is_ipv6($ip))) {
+        print "[$_] $ERRNO - $ERROR\n" if $verbose;
+        next;
+      }
+
+      my $type = is_ipv4($ip) ? "ipv4" : "ipv6";
+
+      # wether on or not
+      if (/^\s*#/) {
+        $on = 0;
+      }
+
+      foreach my $k (split(/\s+/, $domains)) {
+        $list->{$k}->{$type} = [] unless exists $list->{$k}->{$type};
+        my $item;
+        $item->{ip}   = $ip;
+        $item->{on}   = $on;
+        push $list->{$k}->{$type}, $item;
+      }
+    }
+  }
+
+  return $list;
+}
+
+sub host_write {
+  my $list = shift;
+  my $file = shift or die "No file name";
+
+  my $string = write_string($list);
+  return undef unless defined $string;
+
+  open my $fh, '>', $file or die "open file $file error: $!";
+  print $fh $string;
+  close $fh;
+}
+
+sub write_string {
+  my $list = shift;
+  my %dentries;
+  foreach my $k (keys %$list) {
+    foreach my $t (qw(ipv4 ipv6)) {
+      next unless defined $list->{$k}->{$t};
+      my $ip = $list->{$k}->{$t}->[0]->{ip};
+      my $on = $list->{$k}->{$t}->[0]->{on};
+      $dentries{$ip} = [] unless exists $dentries{$ip};
+      push $dentries{$ip}, {dentry => $k, on => $on};
+    }
+  }
+
+  my $content = "";
+  foreach my $d (sort {$a cmp $b} keys %dentries) {
+    my $comment = "";
+    my $hosts = "";
+    foreach my $k (@{$dentries{$d}}) {
+      if ($k->{on} == 0) {
+        $comment = "# ";
+      }
+      $hosts .= $k->{dentry}. " ";
+    }
+    $content .= "$comment" . $d . " $hosts\n" if length($hosts);
+  }
+  return $content;
+}
+
+sub is_ipv4 {
+  my $ip = shift;
+
+  # Check for invalid chars
+  unless ($ip =~ m/^[\d\.]+$/) {
+    $ERROR = "Invalid chars in IP $ip";
+    $ERRNO = 107;
+    return 0;
+  }
+
+  if ($ip =~ m/^\./) {
+    $ERROR = "Invalid IP $ip - starts with a dot";
+    $ERRNO = 103;
+    return 0;
+  }
+
+  if ($ip =~ m/\.$/) {
+    $ERROR = "Invalid IP $ip - ends with a dot";
+    $ERRNO = 104;
+    return 0;
+  }
+
+  # Single Numbers are considered to be IPv4
+  if ($ip =~ m/^(\d+)$/ and $1 < 256) { return 1 }
+
+  # Count quads
+  my $n = ($ip =~ tr/\./\./);
+
+  # IPv4 must have from 1 to 4 quads
+  unless ($n >= 0 and $n < 4) {
+    $ERROR = "Invalid IP address $ip";
+    $ERRNO = 105;
+    return 0;
+  }
+
+  # Check for empty quads
+  if ($ip =~ m/\.\./) {
+    $ERROR = "Empty quad in IP address $ip";
+    $ERRNO = 106;
+    return 0;
+  }
+
+  foreach (split /\./, $ip) {
+    # Check for invalid quads
+    unless ($_ >= 0 and $_ < 256) {
+      $ERROR = "Invalid quad in IP address $ip - $_";
+      $ERRNO = 107;
+      return 0;
+    }
+  }
+  return 1;
+}
+
+sub is_ipv6 {
+  my $ip = shift;
+
+  # Count octets
+  my $n = ($ip =~ tr/:/:/);
+  return 0 unless ($n > 0 and $n < 8);
+
+  # $k is a counter
+  my $k;
+
+  foreach (split /:/, $ip) {
+    $k++;
+
+    # Empty octet ?
+    next if ($_ eq '');
+
+    # Normal v6 octet ?
+    next if (/^[a-f\d]{1,4}$/i);
+
+    # Last octet - is it IPv4 ?
+    if ( ($k == $n + 1) && ip_is_ipv4($_) ) {
+      $n++; # ipv4 is two octets
+      next;
+    }
+
+    $ERROR = "Invalid IP address $ip";
+    $ERRNO = 108;
+    return 0;
+  }
+
+  # Does the IP address start with : ?
+  if ($ip =~ m/^:[^:]/) {
+    $ERROR = "Invalid address $ip (starts with :)";
+    $ERRNO = 109;
+    return 0;
+  }
+
+  # Does the IP address finish with : ?
+  if ($ip =~ m/[^:]:$/) {
+    $ERROR = "Invalid address $ip (ends with :)";
+    $ERRNO = 110;
+    return 0;
+  }
+
+  # Does the IP address have more than one '::' pattern ?
+  if ($ip =~ s/:(?=:)/:/g > 1) {
+    $ERROR = "Invalid address $ip (More than one :: pattern)";
+    $ERRNO = 111;
+    return 0;
+  }
+
+  # number of octets
+  if ($n != 7 && $ip !~ /::/) {
+    $ERROR = "Invalid number of octets $ip";
+    $ERRNO = 112;
+    return 0;
+  }
+
+  # valid IPv6 address
+  return 1;
+}
+
+# conflict domain check
+sub is_host_conflict {
+  my $list = shift;
+  my $status = 0;
+
+  my %check;
+  foreach my $k (keys %$list) {
+    foreach my $t (qw(ipv4 ipv6)) {
+      next unless defined $list->{$k}->{$t};
+      if (@{$list->{$k}->{$t}} + 0 > 1) {
+        $status++;
+        $check{$k}{conflict} = 1;
+        $check{$k}{list} = [ map { $_->{ip} } @{$list->{$k}->{$t}} ];
+      }
+    }
+  }
+  foreach my $k (keys %check) {
+    if($check{$k}{conflict}) {
+        print "Conflicting hostname entries for "
+              . $k . ' -> '
+              . join(', ', @{$check{$k}{list}})
+              . "\n";
+    }
+  }
+  return $status;
+}
+
+sub host_fix {
+  my $list = shift;
+  my $copy;
+  foreach my $k (keys %$list) {
+    foreach my $t (qw(ipv4 ipv6)) {
+      next unless defined $list->{$k}->{$t};
+      if (is_on($list->{$k}->{$t})) {
+        foreach my $v (@{$list->{$k}->{$t}}) {
+          if ($v->{on}) {
+            $copy->{$k}->{$t} = [$v];
+            last;
+          }
+        }
+      }
+      else {
+        my $v = $list->{$k}->{$t}->[0];
+        $copy->{$k}->{$t} = [$v];
+        last;
+      }
+    }
+  }
+
+  return $copy;
+}
+
+sub is_on {
+  my $v  = shift;
+  my $on = 0;
+
+  foreach my $k (@$v) {
+    $on++ if $k->{on} == 1;
+  }
+
+  return $on;
+}
+
+sub host_list {
+  my $list = shift;
+  my $maxlen = max (map {length($_)} keys %$list);
+
+  foreach my $k (sort { $a cmp $b } keys %$list) {
+    foreach my $t (qw(ipv4 ipv6)) {
+      next unless defined $list->{$k}->{$t};
+      my $v = $list->{$k}->{$t};
+      my $status = $v->[0]->{on} ? "on" : "off";
+      printf("%-*s => %-15s  (%s)\n", $maxlen, $k, $v->[0]->{ip}, $status);
+    }
+  }
+}
+
+sub host_has {
+  my $list = shift;
+  my $item = shift;
+  die "No domain value!" unless defined $item;
+  
+  my $status = 0;
+  if (defined $list->{$item}) {
+      $status = 1;
+  }
+  return $status;
+}
+
+sub host_switch {
+  my ($list, $item, $status) = @_;
+  die "No domain value!" unless defined $item;
+
+  my $on = $status eq 'on'
+         ? 1
+         : $status eq 'off'
+         ? 0
+         : undef;
+  die "status must on or off!" unless defined $on;
+
+  unless (host_has($list, $item)) {
+    print "$item not found in hosts file\n";
+    return 0;
+  }
+  
+  foreach my $t (qw(ipv4 ipv6)) {
+    next unless defined $list->{$item}->{$t};
+    # enable host dentry
+    $list->{$item}->{$t}->[0]->{on} = $on;
+  }
+  return 1;
+}
+
+sub host_add {
+  my $list = shift;
+  my $item = shift; 
+  my $ip   = shift;
+  my $on   = shift;
+
+  die "No domain value!" unless defined $item;
+  die "No ip value!" unless defined $ip;
+
+  if (host_has($list, $item)) {
+    print "$item has already in hosts file\n";
+    return 0;
+  }
+  my $type = is_ipv4($ip) ? "ipv4" : is_ipv6($ip) ? "ipv6" : undef;
+  die "$ip is neither ipv4 nor ipv6!" unless $type;
+
+  $list->{$item}->{$type}->[0]->{on} = $on;
+  $list->{$item}->{$type}->[0]->{ip} = $ip;
+
+  return 1;
+}
+
+sub host_del {
+  my $list = shift;
+  my $item = shift || die "No domain value!";
+
+  unless (host_has($list, $item)) {
+    print "$item not found in hosts file\n";
+    return 0;
+  }
+
+  delete $list->{$item};
+  return 1;
+}
+
+sub host_backup {
+  my $file_backup = "/tmp/hosts-" . time();
+  copy($file, $file_backup) or die "backup /etc/hosts failed: $!";
+  print "backup /etc/hosts to $file_backup\n";
+}
+
+my $mode_check = 0;
+foreach my $k (qw(list fix add aff on off del has)) {
+  $mode_check = 1 if $k eq $mode;
+}
+
+unless ($mode_check) {
+  print "Unknown mode $mode, mode must set: list, fix, add, aff, on, off, del, has\n";
+  exit 1;
+}
+
+my $domain = $ARGV[0];
+my $ip = $ARGV[1];
+
+my $lists = host_read($file);
+
+my $exit = 0;
+if ($mode eq 'fix') {
+  my $items = host_fix($lists);
+  if ($dryrun) {
+    print write_string($items);
+  }
+  else {
+    host_backup() if $backup;
+    host_write($items, $file);
+    host_list($items) if $verbose;
+  }
+}
+else {
+  if (is_host_conflict($lists)) {
+    print "use fix mode to solve the Conflicting\n";
+    $mode eq 'list' ? host_list($lists) : exit 1;
+  }
+
+  if ($mode eq 'list') {
+    host_list($lists);
+  }
+
+  if ($mode eq 'has') {
+    if (host_has($lists, $domain)) {
+      print "found $domain in hosts file\n"
+    }
+    else {
+      print "$domain not found in hosts file\n";
+      $exit = 1;
+    }
+  }
+
+  my $status = 0;
+  if ($mode eq 'on') {
+    $status = host_switch($lists, $domain, 'on');
+    $exit = 1 unless $status;
+  }
+  if ($mode eq 'off') {
+    $status = host_switch($lists, $domain, 'off');
+    $exit = 1 unless $status;
+  }
+  if ($mode eq 'add') {
+    $status = host_add($lists, $domain, $ip, 1);
+  }
+  if ($mode eq 'aff') {
+    $status = host_add($lists, $domain, $ip, 0);
+  }
+  if ($mode eq 'del') {
+    $status = host_del($lists, $domain);
+  }
+  if ($status) {
+    unless ($dryrun) {
+      my $msg = defined $ip ? "$domain $ip" : "$domain";
+      print "ok - [$mode] $msg\n";
+    }
+
+    if ($dryrun) {
+      print "[dryrun]:\n";
+      print write_string($lists);
+    }
+    else {
+      host_backup() if $backup;
+      host_write($lists, $file);
+      host_list($lists) if $verbose;
+    }
+    exit 0;
+  }
+  else {
+    print "error - [$mode] $domain $ip\n" if $verbose;
+  }
+}
+
+exit $exit;
+
+
+# ###################################################################
+# Documentation.
+# ###################################################################
+
+=head1 OPTIONS
+
+=over 4
+
+=item file | f
+
+hosts file, default is /etc/hosts.
+
+=item mode | m
+
+action mode, default is list, the value must be the following options:
+
+   list: List domains, target ips, and on/off status
+   fix:  Rewrite your hosts file; use -d to dryrun
+   add:  Add or replace a hosts entry for this domain pointing to this IP
+   aff:  Add or replace a hosts entry in an off state
+   on:   Re-enable a domain that was disabled, exit 1 if entry is missing
+   off:  Disable a domain (but don't remove it completely), exit 1 if entry is missing
+   del:  (alias rm) Remove a domain from your hosts file
+   has:  exit code 0 if the domain is in your hostfile, 1 otherwise
+   
+=item backup | b
+
+whether backup hosts file or not before change hosts file, default is no.
+
+=item verbose | v
+
+whether print verbose message.
+
+=item dryrun | r
+
+don't apply action mode, just print the result hosts entry.
+
+=item help | h
+
+print help message.
+
+=back
+
+=head1 AUTHOR
+
+arstercz<chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut

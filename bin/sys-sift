@@ -1,0 +1,1520 @@
+#!/usr/bin/env bash
+
+# This program is part of Percona Toolkit: http://www.percona.com/software/
+# See "COPYRIGHT, LICENSE, AND WARRANTY" at the end of this file for legal
+# notices and disclaimers.
+
+# ###########################################################################
+# log_warn_die package
+# This package is a copy without comments from the original.  The original
+# with comments and its test file can be found in the Bazaar repository at,
+#   lib/bash/log_warn_die.sh
+#   t/lib/bash/log_warn_die.sh
+# See https://launchpad.net/percona-toolkit for more information.
+# ###########################################################################
+
+
+set -u
+
+PTFUNCNAME=""
+PTDEBUG="${PTDEBUG:-""}"
+EXIT_STATUS=0
+
+ts() {
+   TS=$(date +%F-%T | tr ':-' '_')
+   echo "$TS $*"
+}
+
+info() {
+   [ ${OPT_VERBOSE:-3} -ge 3 ] && ts "$*"
+}
+
+log() {
+   [ ${OPT_VERBOSE:-3} -ge 2 ] && ts "$*"
+}
+
+warn() {
+   [ ${OPT_VERBOSE:-3} -ge 1 ] && ts "$*" >&2
+   EXIT_STATUS=1
+}
+
+die() {
+   ts "$*" >&2
+   EXIT_STATUS=1
+   exit 1
+}
+
+_d () {
+   [ "$PTDEBUG" ] && echo "# $PTFUNCNAME: $(ts "$*")" >&2
+}
+
+# ###########################################################################
+# End log_warn_die package
+# ###########################################################################
+
+# ###########################################################################
+# tmpdir package
+# This package is a copy without comments from the original.  The original
+# with comments and its test file can be found in the Bazaar repository at,
+#   lib/bash/tmpdir.sh
+#   t/lib/bash/tmpdir.sh
+# See https://launchpad.net/percona-toolkit for more information.
+# ###########################################################################
+
+
+set -u
+
+PT_TMPDIR=""
+
+mk_tmpdir() {
+   local dir="${1:-""}"
+
+   if [ -n "$dir" ]; then
+      if [ ! -d "$dir" ]; then
+         mkdir "$dir" || die "Cannot make tmpdir $dir"
+      fi
+      PT_TMPDIR="$dir"
+   else
+      local tool="${0##*/}"
+      local pid="$$"
+      PT_TMPDIR=`mktemp -d -t "${tool}.${pid}.XXXXXX"` \
+         || die "Cannot make secure tmpdir"
+   fi
+}
+
+rm_tmpdir() {
+   if [ -n "$PT_TMPDIR" ] && [ -d "$PT_TMPDIR" ]; then
+      rm -rf "$PT_TMPDIR"
+   fi
+   PT_TMPDIR=""
+}
+
+# ###########################################################################
+# End tmpdir package
+# ###########################################################################
+
+# ###########################################################################
+# parse_options package
+# This package is a copy without comments from the original.  The original
+# with comments and its test file can be found in the Bazaar repository at,
+#   lib/bash/parse_options.sh
+#   t/lib/bash/parse_options.sh
+# See https://launchpad.net/percona-toolkit for more information.
+# ###########################################################################
+
+
+
+
+
+set -u
+
+ARGV=""           # Non-option args (probably input files)
+EXT_ARGV=""       # Everything after -- (args for an external command)
+HAVE_EXT_ARGV=""  # Got --, everything else is put into EXT_ARGV
+OPT_ERRS=0        # How many command line option errors
+OPT_VERSION=""    # If --version was specified
+OPT_HELP=""       # If --help was specified
+OPT_ASK_PASS=""   # If --ask-pass was specified
+PO_DIR=""         # Directory with program option spec files
+
+usage() {
+   local file="$1"
+
+   local usage="$(grep '^Usage: ' "$file")"
+   echo $usage
+   echo
+   echo "For more information, 'man $TOOL' or 'perldoc $file'."
+}
+
+usage_or_errors() {
+   local file="$1"
+   local version=""
+
+   if [ "$OPT_VERSION" ]; then
+      version=$(grep '^pt-[^ ]\+ [0-9]' "$file")
+      echo "$version"
+      return 1
+   fi
+
+   if [ "$OPT_HELP" ]; then
+      usage "$file"
+      echo
+      echo "Command line options:"
+      echo
+      perl -e '
+         use strict;
+         use warnings FATAL => qw(all);
+         my $lcol = 20;         # Allow this much space for option names.
+         my $rcol = 80 - $lcol; # The terminal is assumed to be 80 chars wide.
+         my $name;
+         while ( <> ) {
+            my $line = $_;
+            chomp $line;
+            if ( $line =~ s/^long:/  --/ ) {
+               $name = $line;
+            }
+            elsif ( $line =~ s/^desc:// ) {
+               $line =~ s/ +$//mg;
+               my @lines = grep { $_      }
+                           $line =~ m/(.{0,$rcol})(?:\s+|\Z)/g;
+               if ( length($name) >= $lcol ) {
+                  print $name, "\n", (q{ } x $lcol);
+               }
+               else {
+                  printf "%-${lcol}s", $name;
+               }
+               print join("\n" . (q{ } x $lcol), @lines);
+               print "\n";
+            }
+         }
+      ' "$PO_DIR"/*
+      echo
+      echo "Options and values after processing arguments:"
+      echo
+      (
+         cd "$PO_DIR"
+         for opt in *; do
+            local varname="OPT_$(echo "$opt" | tr a-z- A-Z_)"
+            eval local varvalue=\$$varname
+            if ! grep -q "type:" "$PO_DIR/$opt" >/dev/null; then
+               if [ "$varvalue" -a "$varvalue" = "yes" ];
+                  then varvalue="TRUE"
+               else
+                  varvalue="FALSE"
+               fi
+            fi
+            printf -- "  --%-30s %s" "$opt" "${varvalue:-(No value)}"
+            echo
+         done
+      )
+      return 1
+   fi
+
+   if [ $OPT_ERRS -gt 0 ]; then
+      echo
+      usage "$file"
+      return 1
+   fi
+
+   return 0
+}
+
+option_error() {
+   local err="$1"
+   OPT_ERRS=$(($OPT_ERRS + 1))
+   echo "$err" >&2
+}
+
+parse_options() {
+   local file="$1"
+   shift
+
+   ARGV=""
+   EXT_ARGV=""
+   HAVE_EXT_ARGV=""
+   OPT_ERRS=0
+   OPT_VERSION=""
+   OPT_HELP=""
+   OPT_ASK_PASS=""
+   PO_DIR="$PT_TMPDIR/po"
+
+   if [ ! -d "$PO_DIR" ]; then
+      mkdir "$PO_DIR"
+      if [ $? -ne 0 ]; then
+         echo "Cannot mkdir $PO_DIR" >&2
+         exit 1
+      fi
+   fi
+
+   rm -rf "$PO_DIR"/*
+   if [ $? -ne 0 ]; then
+      echo "Cannot rm -rf $PO_DIR/*" >&2
+      exit 1
+   fi
+
+   _parse_pod "$file"  # Parse POD into program option (po) spec files
+   _eval_po            # Eval po into existence with default values
+
+   if [ $# -ge 2 ] &&  [ "$1" = "--config" ]; then
+      shift  # --config
+      local user_config_files="$1"
+      shift  # that ^
+      local IFS=","
+      for user_config_file in $user_config_files; do
+         _parse_config_files "$user_config_file"
+      done
+   else
+      _parse_config_files "/etc/percona-toolkit/percona-toolkit.conf" "/etc/percona-toolkit/$TOOL.conf"
+      if [ "${HOME:-}" ]; then
+         _parse_config_files "$HOME/.percona-toolkit.conf" "$HOME/.$TOOL.conf"
+      fi
+   fi
+
+   _parse_command_line "${@:-""}"
+}
+
+_parse_pod() {
+   local file="$1"
+
+   PO_FILE="$file" PO_DIR="$PO_DIR" perl -e '
+      $/ = "";
+      my $file = $ENV{PO_FILE};
+      open my $fh, "<", $file or die "Cannot open $file: $!";
+      while ( defined(my $para = <$fh>) ) {
+         next unless $para =~ m/^=head1 OPTIONS/;
+         while ( defined(my $para = <$fh>) ) {
+            last if $para =~ m/^=head1/;
+            chomp;
+            if ( $para =~ m/^=item --(\S+)/ ) {
+               my $opt  = $1;
+               my $file = "$ENV{PO_DIR}/$opt";
+               open my $opt_fh, ">", $file or die "Cannot open $file: $!";
+               print $opt_fh "long:$opt\n";
+               $para = <$fh>;
+               chomp;
+               if ( $para =~ m/^[a-z ]+:/ ) {
+                  map {
+                     chomp;
+                     my ($attrib, $val) = split(/: /, $_);
+                     print $opt_fh "$attrib:$val\n";
+                  } split(/; /, $para);
+                  $para = <$fh>;
+                  chomp;
+               }
+               my ($desc) = $para =~ m/^([^?.]+)/;
+               print $opt_fh "desc:$desc.\n";
+               close $opt_fh;
+            }
+         }
+         last;
+      }
+   '
+}
+
+_eval_po() {
+   local IFS=":"
+   for opt_spec in "$PO_DIR"/*; do
+      local opt=""
+      local default_val=""
+      local neg=0
+      local size=0
+      while read key val; do
+         case "$key" in
+            long)
+               opt=$(echo $val | sed 's/-/_/g' | tr '[:lower:]' '[:upper:]')
+               ;;
+            default)
+               default_val="$val"
+               ;;
+            "short form")
+               ;;
+            type)
+               [ "$val" = "size" ] && size=1
+               ;;
+            desc)
+               ;;
+            negatable)
+               if [ "$val" = "yes" ]; then
+                  neg=1
+               fi
+               ;;
+            *)
+               echo "Invalid attribute in $opt_spec: $line" >&2
+               exit 1
+         esac 
+      done < "$opt_spec"
+
+      if [ -z "$opt" ]; then
+         echo "No long attribute in option spec $opt_spec" >&2
+         exit 1
+      fi
+
+      if [ $neg -eq 1 ]; then
+         if [ -z "$default_val" ] || [ "$default_val" != "yes" ]; then
+            echo "Option $opt_spec is negatable but not default: yes" >&2
+            exit 1
+         fi
+      fi
+
+      if [ $size -eq 1 -a -n "$default_val" ]; then
+         default_val=$(size_to_bytes $default_val)
+      fi
+
+      eval "OPT_${opt}"="$default_val"
+   done
+}
+
+_parse_config_files() {
+
+   for config_file in "${@:-""}"; do
+      test -f "$config_file" || continue
+
+      while read config_opt; do
+
+         echo "$config_opt" | grep '^[ ]*[^#]' >/dev/null 2>&1 || continue
+
+         config_opt="$(echo "$config_opt" | sed -e 's/^ *//g' -e 's/ *$//g' -e 's/[ ]*=[ ]*/=/' -e 's/[ ]+#.*$//')"
+
+         [ "$config_opt" = "" ] && continue
+
+         echo "$config_opt" | grep -v 'version-check' >/dev/null 2>&1 || continue
+
+         if ! [ "$HAVE_EXT_ARGV" ]; then
+            config_opt="--$config_opt"
+         fi
+
+         _parse_command_line "$config_opt"
+
+      done < "$config_file"
+
+      HAVE_EXT_ARGV=""  # reset for each file
+
+   done
+}
+
+_parse_command_line() {
+   local opt=""
+   local val=""
+   local next_opt_is_val=""
+   local opt_is_ok=""
+   local opt_is_negated=""
+   local real_opt=""
+   local required_arg=""
+   local spec=""
+
+   for opt in "${@:-""}"; do
+      if [ "$opt" = "--" -o "$opt" = "----" ]; then
+         HAVE_EXT_ARGV=1
+         continue
+      fi
+      if [ "$HAVE_EXT_ARGV" ]; then
+         if [ "$EXT_ARGV" ]; then
+            EXT_ARGV="$EXT_ARGV $opt"
+         else
+            EXT_ARGV="$opt"
+         fi
+         continue
+      fi
+
+      if [ "$next_opt_is_val" ]; then
+         next_opt_is_val=""
+         if [ $# -eq 0 ] || [ $(expr "$opt" : "\-") -eq 1 ]; then
+            option_error "$real_opt requires a $required_arg argument"
+            continue
+         fi
+         val="$opt"
+         opt_is_ok=1
+      else
+         if [ $(expr "$opt" : "\-") -eq 0 ]; then
+            if [ -z "$ARGV" ]; then
+               ARGV="$opt"
+            else
+               ARGV="$ARGV $opt"
+            fi
+            continue
+         fi
+
+         real_opt="$opt"
+
+         if $(echo $opt | grep '^--no[^-]' >/dev/null); then
+            local base_opt=$(echo $opt | sed 's/^--no//')
+            if [ -f "$PT_TMPDIR/po/$base_opt" ]; then
+               opt_is_negated=1
+               opt="$base_opt"
+            else
+               opt_is_negated=""
+               opt=$(echo $opt | sed 's/^-*//')
+            fi
+         else
+            if $(echo $opt | grep '^--no-' >/dev/null); then
+               opt_is_negated=1
+               opt=$(echo $opt | sed 's/^--no-//')
+            else
+               opt_is_negated=""
+               opt=$(echo $opt | sed 's/^-*//')
+            fi
+         fi
+
+         if $(echo $opt | grep '^[a-z-][a-z-]*=' >/dev/null 2>&1); then
+            val="$(echo $opt | awk -F= '{print $2}')"
+            opt="$(echo $opt | awk -F= '{print $1}')"
+         fi
+
+         if [ -f "$PT_TMPDIR/po/$opt" ]; then
+            spec="$PT_TMPDIR/po/$opt"
+         else
+            spec=$(grep "^short form:-$opt\$" "$PT_TMPDIR"/po/* | cut -d ':' -f 1)
+            if [ -z "$spec"  ]; then
+               option_error "Unknown option: $real_opt"
+               continue
+            fi
+         fi
+
+         required_arg=$(cat "$spec" | awk -F: '/^type:/{print $2}')
+         if [ "$required_arg" ]; then
+            if [ "$val" ]; then
+               opt_is_ok=1
+            else
+               next_opt_is_val=1
+            fi
+         else
+            if [ "$val" ]; then
+               option_error "Option $real_opt does not take a value"
+               continue
+            fi 
+            if [ "$opt_is_negated" ]; then
+               val=""
+            else
+               val="yes"
+            fi
+            opt_is_ok=1
+         fi
+      fi
+
+      if [ "$opt_is_ok" ]; then
+         opt=$(cat "$spec" | grep '^long:' | cut -d':' -f2 | sed 's/-/_/g' | tr '[:lower:]' '[:upper:]')
+
+         if grep "^type:size" "$spec" >/dev/null; then
+            val=$(size_to_bytes $val)
+         fi
+
+         eval "OPT_$opt"="'$val'"
+
+         opt=""
+         val=""
+         next_opt_is_val=""
+         opt_is_ok=""
+         opt_is_negated=""
+         real_opt=""
+         required_arg=""
+         spec=""
+      fi
+   done
+}
+
+size_to_bytes() {
+   local size="$1"
+   echo $size | perl -ne '%f=(B=>1, K=>1_024, M=>1_048_576, G=>1_073_741_824, T=>1_099_511_627_776); m/^(\d+)([kMGT])?/i; print $1 * $f{uc($2 || "B")};'
+}
+
+# ###########################################################################
+# End parse_options package
+# ###########################################################################
+
+# ###########################################################################
+# Global variables
+# ###########################################################################
+
+TOOL="sys-sift"
+if [ -d "/var/lib/wt-stalk" ]; then
+   BASEDIR="/var/lib/wt-stalk"
+else
+   BASEDIR="$PWD"
+fi
+PREFIX=""
+
+# ###########################################################################
+# Subroutines
+# ###########################################################################
+
+sigtrap() {
+   echo "Caught signal, exiting" >&2
+   rm_tmpdir
+   exit 0
+}
+
+_which() {
+   if [ -x /usr/bin/which ]; then
+      /usr/bin/which "$1" 2>/dev/null | awk '{print $1}'
+   elif which which 1>/dev/null 2>&1; then
+      which "$1" 2>/dev/null | awk '{print $1}'
+   else
+      echo "$1"
+   fi
+}
+
+fuzzy_formula='
+   rounded = 0;
+   if (fuzzy_var <= 10 ) {
+      rounded   = 1;
+   }
+   factor = 1;
+   while ( rounded == 0 ) {
+      if ( fuzzy_var <= 50 * factor ) {
+         fuzzy_var = sprintf("%.0f", fuzzy_var / (5 * factor)) * 5 * factor;
+         rounded   = 1;
+      }
+      else if ( fuzzy_var <= 100  * factor) {
+         fuzzy_var = sprintf("%.0f", fuzzy_var / (10 * factor)) * 10 * factor;
+         rounded   = 1;
+      }
+      else if ( fuzzy_var <= 250  * factor) {
+         fuzzy_var = sprintf("%.0f", fuzzy_var / (25 * factor)) * 25 * factor;
+         rounded   = 1;
+      }
+      factor = factor * 10;
+   }'
+
+fuzz () {
+   awk -v fuzzy_var="$1" "BEGIN { ${fuzzy_formula} print fuzzy_var;}"
+}
+
+fuzzy_pct () {
+   local pct="$(awk -v one="$1" -v two="$2" 'BEGIN{ if (two > 0) { printf "%d", one/two*100; } else {print 0} }')";
+   echo "$(fuzz "${pct}")%"
+}
+
+# Show current help and settings
+print_help() {
+   cat <<-HELP
+   You can control this program with key presses.
+                  ---  COMMANDS  ---
+      1  Default action: summarize files
+      0  Minimal action: list files
+      *  View all the files in less
+      d  Invoke 'diskstats' on the disk performance data
+      n  Summarize the 'netstat -antp' status data
+      s  Poor man's profile on the stacktrace data
+      t  read the tcpdump data
+      p  Report the perf data
+                  --- NAVIGATION ---
+      j  Select the next timestamp
+      k  Select the previous timestamp
+      q  Quit the program
+	HELP
+}
+
+perf_diskstats() {
+  local file="$1"
+  cat <<'EOP' > "$PT_TMPDIR/disk_perf_stats.pl"
+    #!/usr/bin/env perl
+    use strict;
+    use warnings;
+    use POSIX qw(strftime);
+
+    my $disk_state; # last value
+    my $disk_value; # current value
+    my $disk_now;   # avg value
+    my $n = 0;
+
+    # kernel version >= 2.6, 11 fields
+    my %fields = (
+      rs => 1, rs_mer => 2, rs_sec => 3, r_t => 4,
+      ws => 5, ws_mer => 6, ws_sec => 7, w_t => 8,
+      io => 9, e_iot => 10, e_iot_w => 11,
+    );
+
+    sub print_state {
+      my ($device, $disk_info) = @_;
+      printf("%8s%10.2f%10.2f%10.2f%10.2f%13.2f%10.2f%13.2f" 
+             . "%11.2f ms%11.2f ms%11.2f ms%11.2f ms\n",
+            $device, $disk_info->{iops}, $disk_info->{rs}, 
+            $disk_info->{rs_mer}, $disk_info->{ws},
+            $disk_info->{ws_mer}, $disk_info->{rs_sec}, 
+            $disk_info->{ws_sec}, $disk_info->{e_iot}, 
+            $disk_info->{e_iot_w}, $disk_info->{r_t}, 
+            $disk_info->{w_t});
+    }
+
+    sub print_header() {
+      printf("%-8s%10s%10s%10s%10s%10s%10s%10s%12s%15s%13s%13s\n",
+        " " x 8, " " x 6 . "iops", " " x 8 . "rs", " " x 2 . "rs_mer", 
+        " " x 8 . "ws", " " x 7 . "ws_mer", " " x 4 . "rs_sec", " " x 7 
+        . "ws_sec", " " x 6 . "e_iot", " " x 3 . "e_iot_w", " " x 4 
+        . "r_t", " " x 4 . "w_t");
+    }
+
+
+    my $ts = 0;
+    my $ts_old = 0;
+    my $dev;
+
+    while(<stdin>) {
+      next if m/(?:ram|loop)/;
+      chomp;
+      if (/TS\s+(\d+)\.\d+\s+(.+)$/) {
+        $ts_old = $ts;
+        $ts = $1;
+        $n++;
+        if ($n > 1) {
+          my $ts_format = strftime("%FT%T", localtime($disk_value->{ts}));
+          print "TS: $ts_format\n";
+          print_header();
+        }
+      }
+      else {
+        my @values = split(/\s+/, $_);
+        my @msg = @values[3 .. $#values];
+        $dev = $msg[0];
+        $disk_state->{$dev}->{ts} = $ts_old;
+     
+        $disk_value->{$dev}->{ts} = $ts;
+        $disk_value->{ts} = $ts;
+     
+        foreach my $k (keys %fields) {
+          $disk_state->{$dev}->{$k} ||= 0;
+          $disk_value->{$dev}->{$k} = 
+              int(
+               ($msg[$fields{$k}] - $disk_state->{$dev}->{$k})
+               /($disk_value->{$dev}->{ts} - $disk_state->{$dev}->{ts}));
+          $disk_state->{$dev}->{$k} = $msg[$fields{$k}];
+        }
+        $disk_state->{$dev}->{iops} ||= 0;
+
+        $disk_value->{$dev}->{iops} = 
+           int(
+             ($msg[$fields{rs}] + $msg[$fields{ws}] - $disk_state->{$dev}->{iops})
+            /($disk_value->{$dev}->{ts} - $disk_state->{$dev}->{ts}));
+
+        $disk_state->{$dev}->{iops} = 
+            $disk_state->{$dev}->{rs} + $disk_state->{$dev}->{ws};
+        print_state($dev, $disk_value->{$dev}) if $n > 1;
+        exit 0 if $n == 10;
+      }
+    }
+EOP
+
+  perl $PT_TMPDIR/disk_perf_stats.pl < $file
+}
+
+sort_stacktrace() {
+  local file="$1"
+
+  cat $file | \
+   awk "
+      BEGIN {
+         s = \"\";
+      }
+      /^Thread/ {
+         if ( s != \"\" ) {
+            print s;
+         }
+         s = \"\";
+         c = 0;
+      }
+      /^\#/ {
+         if ( \$2 ~ /0x/ ) {
+            if ( \$4 ~/void|const/ ) {
+               targ = \$5;
+            }
+            else {
+               targ = \$4;
+               tfile= \$NF;
+            }
+            if ( targ ~ /[<\\(]/ ) {
+               targ = substr(\$0, index(\$0, \" in \") + 4);
+               if ( targ ~ / from / ) {
+                  targ = substr(targ, 1, index(targ, \" from \") - 1);
+               }
+               if ( targ ~ / at / ) {
+                  targ = substr(targ, 1, index(targ, \" at \") - 1);
+               }
+               # Shorten C++ templates, e.g. in t/samples/stacktrace-004.txt
+               while ( targ ~ />::/ ) {
+                  if ( 0 == gsub(/<[^<>]*>/, \"\", targ) ) {
+                     break;
+                  }
+               }
+               # Further shorten argument lists.
+               while ( targ ~ /\\(/ ) {
+                  if ( 0 == gsub(/\\([^()]*\\)/, \"\", targ) ) {
+                     break;
+                  }
+               }
+               # Remove void and const decorators.
+               gsub(/ ?(void|const) ?/, \"\", targ);
+               gsub(/ /, \"\", targ);
+            }
+            else if ( targ ~ /\\?\\?/ && \$2 ~ /[1-9]/ ) {
+               # Substitute ?? by the name of the library.
+               targ = \$NF;
+               while ( targ ~ /\\// ) {
+                  targ = substr(targ, index(targ, \"/\") + 1);
+               }
+               targ = substr(targ, 1, index(targ, \".\") - 1);
+               targ = targ \"::??\";
+            }
+         }
+         else {
+            targ = \$2;
+         }
+         # get rid of long symbol names such as 'pthread_cond_wait@@GLIBC_2.3.2'
+         if ( targ ~ /@@/ ) {
+            fname = substr(targ, 1, index(targ, \"@@\") - 1);
+         }
+         else {
+            fname = targ;
+            if ( tfile ~ /^\// ) {
+               last=split(tfile,filen,/\//); 
+               fname = targ \"(\" filen[last] \")\";
+            }
+            else {
+               fname = targ
+            }
+         }
+         if ( ${maxlen:-0} == 0 || c < ${maxlen:-0} ) {
+            if (s != \"\" ) {
+               s = s \",\" fname;
+            }
+            else {
+               s = fname;
+            }
+         }
+         c++;
+      }
+      END {
+         print s
+      }
+   " | sort | uniq -c | sort -r -n -k 1,1
+
+}
+
+parse_netstat() {
+   local netfile=$1
+   local limit=$2
+   local file="$PT_TMPDIR/parse_netstat"
+
+   perl -nae '
+      if ($i > 1 and /:\d+\s+/) {
+         print $_ if !/TS/;
+      }
+      if (/TS/) {
+         if ( $i++ > 1 ) {
+            # Stop after the first sample
+            exit;
+         }
+      }
+   ' "${BASEDIR}/${PREFIX}-netstat" > $file
+
+   [ -e "$file" ] || return
+   echo "  Connections from remote IP address"
+   awk '$1 ~ /^tcp/ && $5 ~ /^[1-9]/ {
+      print substr($5, 1, index($5, ":") - 1);
+   }' "${file}" | sort | uniq -c \
+      | awk "{
+         fuzzy_var=\$1;
+         ${fuzzy_formula}
+         printf \"    %-15s %5d\\n\", \$2, fuzzy_var;
+         }" \
+      | sort -n -t . -k 1,1 -k 2,2 -k 3,3 -k 4,4 | head -n$limit
+
+   echo "  Connections to local IP addresses"
+   awk '$1 ~ /^tcp/ && $5 ~ /^[1-9]/ {
+      print substr($4, 1, index($4, ":") - 1);
+   }' "${file}" | sort | uniq -c \
+      | awk "{
+         fuzzy_var=\$1;
+         ${fuzzy_formula}
+         printf \"    %-15s %5d\\n\", \$2, fuzzy_var;
+         }" \
+      | sort -n -t . -k 1,1 -k 2,2 -k 3,3 -k 4,4 | head -n$limit
+
+   echo "  Connections to top 15 local ports"
+   awk '$1 ~ /^tcp/ && $5 ~ /^[1-9]/ {
+      print substr($4, index($4, ":") + 1);
+   }' "${file}" | sort | uniq -c | sort -rn | head -n15 \
+      | awk "{
+         fuzzy_var=\$1;
+         ${fuzzy_formula}
+         printf \"    %-15s %5d\\n\", \$2, fuzzy_var;
+         }" | sort
+   echo "  States of connections"
+   awk '$1 ~ /^tcp/ {
+      print $6;
+   }' "${file}" | sort | uniq -c | sort -rn \
+      | awk "{
+         fuzzy_var=\$1;
+         ${fuzzy_formula}
+         printf \"    %-15s %5d\\n\", \$2, fuzzy_var;
+         }" | sort
+}
+
+perf_netstat() {
+   local file=$1
+   cat <<'EOP' > "$PT_TMPDIR/net_perf_stats.pl"
+     #!/usr/bin/env perl
+     use strict;
+     use warnings;
+
+     my @fields = qw(ip tac tpc tfc tsr tsft tpdq tda tqa tca);
+
+     my %keys = (
+       ip   => 'ip packages received',
+       tac  => 'tcp active connections opening',
+       tpc  => 'tcp passive connections opening',
+       tfc  => 'tcp failed connection attempts',
+       tsr  => 'tcp segment retransmited',
+       tsft => 'tcp sockets finished time wait in fast timer',
+       tpdq => "tcp packets directly queued to recvmsg prequeue",
+       tda  => 'tcp delayed acks send',
+       tqa  => 'tcp quick ack mode times',
+       tca  => 'tcp connections aborted due to timeout',
+     );
+
+     my %key_reg = (
+       ip   => '(\d+) total packets received',
+       tac  => '(\d+) active connections openings',
+       tpc  => '(\d+) passive connection openings',
+       tfc  => '(\d+) failed connection attempts', 
+       tsr  => '(\d+) segments retransmited',
+       tsft => '(\d+) TCP sockets finished time wait in fast timer',
+       tpdq => '(\d+) packets directly queued to recvmsg prequeue',
+       tqa  => 'Quick ack mode was activated (\d+) times',
+       tda  => '(\d+) delayed acks sent',
+       tca  => '(\d+) connections aborted due to timeout',
+    );
+
+    sub print_state {
+      my $net_info = shift;
+      printf("%10d%10d%10d%10d%10d%10d%10d%10d%10d%10d\n",
+             $net_info->{ip}, $net_info->{tac}, $net_info->{tpc}, 
+             $net_info->{tfc}, $net_info->{tsr}, $net_info->{tsft}, 
+             $net_info->{tpdq},  $net_info->{tqa}, $net_info->{tda}, 
+             $net_info->{tca});
+    }
+
+    sub print_header() {
+      printf("%10s%10s%10s%10s%10s%10s%10s%10s%10s%10s\n",
+             "ip", "tac", "tpc", "tfc", "tsr", "tsft", 
+             "tpdq", "tqa", "tda", "tca");
+    }
+
+    # print title
+    print "\n\033[34m--netstat_s fileds description--\033[0m\n";
+    foreach my $k (@fields) {
+      printf("%7s => %s\n", $k, $keys{$k});
+    }
+
+    my %net_state = (); # last value
+    my %net_value = (); # current value
+    my %net_now   = (); # avg value
+    my $n = 0;
+
+    my $ts = 0;
+    my $ts_old = 0;
+    my $dev;
+
+    while(<stdin>) {
+      next if /^\s*$/;
+      if (/TS\s+(\d+)\.\d+\s+(.+)$/) {
+        $ts_old = $ts;
+        $ts = $1;
+        my $ts_format = $2;
+        $n++;
+        if ($n > 1) {
+          print "TS: $ts_format\n";
+          print_header();
+          foreach my $k (@fields) {
+            $net_now{$k} = 
+                int(
+                  ($net_value{$k} - $net_state{$k})
+                  /($net_value{ts} - $net_state{ts})
+                );
+          }
+     
+          print_state(\%net_now);
+        }
+        exit 0 if $n == 10;
+      }
+      else {
+        my $line = $_;
+        $net_state{ts} = $ts_old;
+        $net_value{ts} = $ts;
+     
+        foreach my $k (@fields) {
+          my ($value) = $line =~ m/$key_reg{$k}/;
+          if (defined $value) {
+            $net_state{$k} = $net_value{$k} || 0;
+            $net_value{$k} = $value;
+            last;
+          }
+        }
+     
+      }
+    }
+EOP
+
+   perl $PT_TMPDIR/net_perf_stats.pl < $file
+}
+
+# ###########################################################################
+# Main program loop, called below if tool is ran from the command line.
+# ###########################################################################
+
+main() {
+   trap sigtrap SIGHUP SIGINT SIGTERM
+
+   # If there's a command-line arg, figure out if it's a file, directory, or
+   # prefix.  The outcome of this block of code should be that BASEDIR is the
+   # directory where the files live, without a trailing slash; and PREFIX is
+   # either empty or a timestamp, such as "2011_02_08_16_58_07".
+   if [ $# -eq 1 ]; then
+      if [ -d "$1" ]; then
+         BASEDIR="$1"
+         PREFIX=""
+      elif [ -f "$1" -o -f "$1-output" -o -f "$1output" ]; then
+         BASEDIR="$(dirname "$1")"
+         PREFIX="$(echo "$1" | perl -ne '$_ =~ m/([\d_]+)/; print $1;')"
+      else
+         echo "Error: $1 is not a directory, and there are no wt-stalk files in the curent working directory ($BASEDIR) with a $1 prefix." >&2
+         echo "For more information, 'man pt-sift' or 'perldoc $0'." >&2
+         exit 1
+      fi
+   fi
+
+   # If the programs we need don't exist, try to get them.
+   # Percona Toolkit tools:
+   for prog in wt-align; do
+      # A var can't be named "PR_pt-pmp" so we chop of "pt-" to get
+      # the program's basename, resulting in "PR_pmp".
+      prog_base=${prog#"wt-"}
+      if which "$prog" >/dev/null 2>&1 ; then
+         eval "PR_$prog_base"="$(which "$prog")"
+      elif [ -f "$prog" -a -x "$prog" ]; then
+         eval "PR_$prog_base"="./$prog"
+      elif [ -f "${BASEDIR}/$prog" -a -x "${BASEDIR}/$prog" ]; then
+         eval "PR_$prog_base"="${BASEDIR}/$prog"
+      else
+         echo "Cannot find or fetch required program: $prog" >&2
+         exit 1
+      fi 
+   done
+
+   # We need to generate a list of timestamps, and ask the user to choose one if
+   # there is no PREFIX yet.  NOTE: we rely on the "-output" files here.
+   (
+      cd "$BASEDIR"
+      ls *-output 2>/dev/null | cut -d- -f1 | sort > "$PT_TMPDIR/sys-sift.prefixes" 
+   )
+   if [ ! -s "$PT_TMPDIR/sys-sift.prefixes" ]; then
+      echo "Error: There are no wt-stalk files in $BASEDIR" >&2
+      echo "For more information, 'man sys-sift' or 'perldoc $0'." >&2
+      exit 1
+   fi
+   if [ -z "${PREFIX}" ]; then
+      if [ "$(grep -c . $PT_TMPDIR/sys-sift.prefixes)" = "1" ]; then
+         # If there is only one sample, we use it as the prefix.
+         PREFIX="$(cat $PT_TMPDIR/sys-sift.prefixes)"
+      fi
+   fi
+   if [ -z "${PREFIX}" ]; then
+      echo
+      i=0
+      cat $PT_TMPDIR/sys-sift.prefixes | while read line; do
+         i=$(($i + 1))
+         echo -n "  $line"
+         if [ $i -eq 3 ]; then
+            echo
+            i=0
+         fi
+      done
+      # We might have ended mid-line or we might have printed a newline; print a
+      # newline if required to end the list of timestamp prefixes.
+      awk 'BEGIN { i = 0 } { i++ } END { if ( i % 3 != 0 ) { print "" } }' $PT_TMPDIR/sys-sift.prefixes
+      echo
+      while [ -z "${PREFIX}" -o "$(grep -c "${PREFIX}" $PT_TMPDIR/sys-sift.prefixes)" -ne 1 ]; do
+         DEFAULT="$(tail -1 $PT_TMPDIR/sys-sift.prefixes)"
+         read -e -p "Select a timestamp from the list [${DEFAULT}] " ARG
+         ARG="${ARG:-${DEFAULT}}"
+         if [ "$(grep -c "${ARG}" $PT_TMPDIR/sys-sift.prefixes)" -eq 1 ]; then
+            PREFIX="$(grep "${ARG}" $PT_TMPDIR/sys-sift.prefixes)"
+         fi
+      done
+   fi
+
+   KEY=""
+   ACTION="DEFAULT"
+   while [ "${KEY}" != "q" ]; do
+
+      if [ "${ACTION}" != "INVALID" ]; then
+         # Print the current host, timestamp and action.  Figure out if we're at
+         # the first or last sample, to make it easy to navigate.
+         PAGE="$(awk "/./{i++} /${PREFIX}/{c=i} END{print c, \"of\", i}" $PT_TMPDIR/sys-sift.prefixes)"
+         HOST="$(cat "${BASEDIR}/${PREFIX}-hostname" 2>/dev/null)"
+         echo -e "======== ${HOST:-unknown} at \033[34m${PREFIX} \033[31m${ACTION}\033[0m (${PAGE}) ========"
+      fi
+
+      # Take an action based on the current $ACTION
+      case "${ACTION}" in
+
+         # Format a brief report: busiest device's disk stats, CPU stats
+         DEFAULT)
+            printf "\033[32m--diskstats--\033[0m\n"
+            if [ -f "${BASEDIR}/${PREFIX}-diskstats" ]; then
+               perf_diskstats "${BASEDIR}/${PREFIX}-diskstats"
+            else
+               echo "    No diskstats file exists"
+            fi
+
+            printf "\033[32m--vmstat--\033[0m\n"
+            if [ -f "${BASEDIR}/${PREFIX}-vmstat" ]; then
+               tail -n 3 "${BASEDIR}/${PREFIX}-vmstat-overall" | $PR_align
+
+               # Figure out which column is 'wa' and print this, similar to the
+               # busy% for disks above.
+               wa_col="$(awk '/swpd/{for(i=1;i<=NF;++i){if($i=="wa"){print i; exit}}}' "${BASEDIR}/${PREFIX}-vmstat")"
+               awk "
+                  BEGIN {
+                     fuzz = 5;
+                     printf \"wa\"
+                  }
+                  /[0-9]/ {
+                     wa_rounded = fuzz * sprintf(\"%d\", \$${wa_col} / fuzz);
+                     if ( printed == 1 && prev == wa_rounded ) {
+                        printf \" .\";
+                     }
+                     else {
+                        printf \" %d%%\", wa_rounded;
+                        prev    = wa_rounded;
+                        printed = 1;
+                     }
+                  }" "${BASEDIR}/${PREFIX}-vmstat"
+               echo
+            else
+               echo "    No vmstat file exists"
+            fi
+
+            printf "\033[32m--stack traces--\033[0m\n"
+            if [ -e "${BASEDIR}/${PREFIX}-stacktrace" ]; then
+               sort_stacktrace ${BASEDIR}/${PREFIX}-stacktrace | \
+                  head -n8
+            else
+               echo "    No stack trace file exists"
+            fi
+
+            printf "\033[32m--oprofile--\033[0m\n"
+            if [ ! -e "${BASEDIR}/${PREFIX}-opreport" ]; then
+               echo "    No opreport file exists"
+            fi
+            test -e "${BASEDIR}/${PREFIX}-opreport" && awk '
+               {
+                  if ( $1 == "samples" ) {
+                     go = 1;
+                  }
+                  if ( go == 1 ) {
+                     print "    " $0;
+                     if ( printed++ == 6 ) {
+                        exit;
+                     }
+                  }
+               } ' "${BASEDIR}/${PREFIX}-opreport"
+
+            printf "\033[32m--httpstat--\033[0m\n"
+            if [ -e "${BASEDIR}/${PREFIX}-check-url" ]; then
+               cat ${BASEDIR}/${PREFIX}-check-url
+            else
+               echo "    No checkurl file exists"
+            fi
+
+            printf "\033[32m--netstat--\033[0m\n"
+            if [ -e "${BASEDIR}/${PREFIX}-netstat" ]; then
+               parse_netstat ${BASEDIR}/${PREFIX}-netstat 10
+            else
+               echo "    No netstat file exists"
+            fi
+            if [ -e "${BASEDIR}/${PREFIX}-netstat_s" ]; then
+               perf_netstat ${BASEDIR}/${PREFIX}-netstat_s
+            else
+               echo "    No netstat_s file exists"
+            fi
+
+            printf "\033[32m--tcprstat--\033[0m\n"
+            if [ -e "${BASEDIR}/${PREFIX}-tcprstat" ]; then
+               head -n 10 ${BASEDIR}/${PREFIX}-tcprstat
+            else
+               echo "    No tcprstat file exists"
+            fi
+
+            ;;
+
+         LIST)
+            ls -lh ${BASEDIR}/${PREFIX}-*
+            ;;
+
+         VIEW)
+            echo "Viewing all files"
+            less_files=$(find ${BASEDIR}${PREFIX}-* -type f | \
+                          grep -v -P '(?:tcpdump|vmstat)$')
+            less  -i $less_files
+            echo "Press a key to continue or choose a different action"
+            ;;
+
+         DISKSTATS)
+            echo "Starting perf_diskstats"
+            if [ -e "${BASEDIR}/${PREFIX}-diskstats" ]; then
+              perf_diskstats "${BASEDIR}/${PREFIX}-diskstats"
+            else 
+              echo "   No diskstats file exists"
+            fi
+            echo "Press a key to continue or choose a different action"
+            ;;
+
+         STACKTRACE)
+            echo "Starting sort_stacktrace"
+            if [ -e "${BASEDIR}/${PREFIX}-stacktrace" ]; then
+              sort_stacktrace "$BASEDIR/${PREFIX}-stacktrace" | head -n 15
+            else 
+              echo "   No stacktrace is not exists"
+            fi
+            echo "Press a key to continue or choose a different action"
+            ;;
+
+         NETWORK)
+            echo "Status of connection:"
+            if [ -e "${BASEDIR}/${PREFIX}-netstat" ]; then
+              parse_netstat ${BASEDIR}/${PREFIX}-netstat 50
+            else
+              echo "   No netstat file exists"
+            fi
+            if [ -e "${BASEDIR}/${PREFIX}-netstat_s" ]; then
+               perf_netstat ${BASEDIR}/${PREFIX}-netstat_s
+            fi
+
+            if [ -e "${BASEDIR}/${PREFIX}-tcprstat" ]; then
+               head -n 20 ${BASEDIR}/${PREFIX}-tcprstat
+            fi
+            echo "Press a key to continue or choose a different action"
+            ;;
+
+         TCPDUMP)
+            echo "Starting tcpdump:"
+            if [ -e "${BASEDIR}/${PREFIX}-tcpdump" ]; then
+              CMD_TCPDUMP="${CMD_TCPDUMP:-"$(_which tcpdump)"}"
+              if [ "$CMD_TCPDUMP" ]; then
+                 $CMD_TCPDUMP -s 65535 -nn -i any -r \
+                     ${BASEDIR}/${PREFIX}-tcpdump | less
+              else
+                 echo "Can not find tcpdump command"
+              fi
+            else
+              echo "   No tcpdump file exists"
+            fi
+            echo "Press a key to continue or choose a different action"
+            ;;
+
+         PERF)
+            echo "Starting perf report:"
+            CMD_PERF="${CMD_PERF:-"$(_which perf)"}"
+            CMD_STACKCOLLAPSE_PERF="${CMD_STACKCOLLAPSE_PERF:-"$(_which stackcollapse-perf.pl)"}"
+            CMD_FLAMEGRAPH="${CMD_FLAMEGRAPH:-"$(_which flamegraph.pl)"}"
+            if [ "$CMD_PERF" ]; then
+               if [ -e "${BASEDIR}/${PREFIX}-perf" ]; then
+                  $CMD_PERF report -g -i "${BASEDIR}/${PREFIX}-perf"
+                  if [ "$CMD_STACKCOLLAPSE_PERF" -a "$CMD_FLAMEGRAPH" ]; then
+                     if [ ! -e "${BASEDIR}/perf-svg-${PREFIX}.svg" ]; then
+                        $CMD_PERF script -i ${BASEDIR}/${PREFIX}-perf | \
+                           $CMD_STACKCOLLAPSE_PERF | \
+                           $CMD_FLAMEGRAPH --title="Flame Graph: $HOST" \
+                              > ${BASEDIR}/perf-svg-${PREFIX}.svg
+
+                        printf "\n\033[32m[flamegraph]\033[0m ${BASEDIR}/perf-svg-${PREFIX}.svg\n\n"
+                     else
+                        printf "\n\033[32m[flamegraph]\033[0m ${BASEDIR}/perf-svg-${PREFIX}.svg\n\n"
+                     fi
+                  fi
+               else
+                  echo "   No perf file exists"
+               fi
+            else
+               echo "   Cann't find perf command"
+            fi
+
+            echo "Press a key to continue or choose a different action"
+            ;;
+
+         INVALID)
+            ;;
+
+      esac
+
+      # Capture and handle the interactive key-strokes.
+      tput sgr0
+      KEY=""
+      if ! read -n 1 -s KEY 2>/dev/null; then
+         echo "Error while trying to read interactive keystroke command. Exiting."
+         exit
+      fi
+      case "${KEY:-}" in
+         j|k)
+            PREFIX="$(awk "
+               BEGIN {
+                  printed = 0;
+               }
+               {
+                  prev=curr;
+                  curr=\$1;
+                  if ( \"j\" == \"${KEY}\" && prev == \"${PREFIX}\" && curr ~ /./ ) {
+                     print curr;
+                     printed = 1;
+                     exit;
+                  }
+                  if ( \"k\" == \"${KEY}\" && curr == \"${PREFIX}\" && prev ~ /./ ) {
+                     print prev;
+                     printed = 1;
+                     exit;
+                  }
+               }
+               END {
+                  if ( printed == 0 ) {
+                     print \"${PREFIX}\";
+                  }
+               }" $PT_TMPDIR/sys-sift.prefixes)"
+            ;;
+         1)
+            ACTION="DEFAULT"
+            ;;
+         0)
+            ACTION="LIST"
+            ;;
+         '*')
+            ACTION="VIEW"
+            ;;
+         d)
+            ACTION="DISKSTATS"
+            ;;
+         n)
+            ACTION="NETWORK"
+            ;;
+         s)
+            ACTION="STACKTRACE"
+            ;;
+         t)
+            ACTION="TCPDUMP"
+            ;;
+         p) 
+            ACTION="PERF"
+            ;;
+         q)
+            ;;
+         '?')
+            print_help
+            echo "Press any key to continue"
+            read -n 1 -s
+            echo -n "Select key:"
+            ACTION="INVALID"
+            ;;
+         *)
+            echo "Unknown key '${KEY}'; press ? for help"
+            ACTION="INVALID"
+            ;;
+      esac
+   done
+}
+
+# Execute the program if it was not included from another file.  This makes it
+# possible to include without executing, and thus test.
+if    [ "${0##*/}" = "$TOOL" ] \
+   || [ "${0##*/}" = "bash" -a "${_:-""}" = "$0" ]; then
+
+   mk_tmpdir
+
+   parse_options "$0" "${@:-""}"
+   if [ -z "$OPT_HELP" -a -z "$OPT_VERSION" ]; then
+      if [ $# -gt 1 ]; then
+         option_error "Specify only one PREFIX or DIR"
+      fi
+   fi
+   usage_or_errors "$0"
+   po_status=$?
+   if [ $po_status -ne 0 ]; then
+      [ $OPT_ERRS -gt 0 ] && exit 1
+      exit 0
+   fi
+
+   main "${@:-""}"
+
+   rm_tmpdir
+fi
+
+# ############################################################################
+# Documentation
+# ############################################################################
+:<<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-sift - Browses files created by wt-stalk.
+
+=head1 SYNOPSIS
+
+Usage: sys-sift FILE|PREFIX|DIRECTORY
+
+sys-sift browses files created by L<wt-stalk>.  If no options are given,
+the tool browses all wt-stalk files in C</var/lib/wt-stalk> if that directory
+exists, else the current working directory is used.  If a FILE is given,
+the tool browses files with the same prefix in the given file's directory.
+If a PREFIX is given, the tool browses files in C</var/lib/wt-stalk>
+(or the current working directory) with the same prefix.  If a DIRECTORY
+is given, the tool browses all wt-stalk files in it.
+
+=head1 RISKS
+
+Percona Toolkit is mature, proven in the real world, and well tested,
+but all database tools can pose a risk to the system and the database
+server.  Before using this tool, please:
+
+=over
+
+=item * Read the tool's documentation
+
+=item * Review the tool's known L<"BUGS">
+
+=item * Test the tool on a non-production server
+
+=item * Backup your production server and verify the backups
+
+=back
+
+=head1 DESCRIPTION
+
+sys-sift makes a list of the unique timestamp prefixes of all the files in
+the directory, as written by the L<wt-stalk> tool.  If the user specified
+a timestamp on the command line, then it begins with that sample of data;
+otherwise it begins by showing a list of the timestamps and prompting for
+a selection.  Thereafter, it displays a summary of the selected sample, and
+the user can navigate and inspect with keystrokes.  The keystroke commands
+you can use are as follows:
+
+=over
+
+=item * d
+
+Sets the action to start the diskstats on the sample's disk performance 
+statistics.
+
+=item * n
+
+Summarizes the first sample of netstat data in two ways: by originating host,
+and by connection state.
+
+=item * j
+
+Select the next timestamp as the active sample.
+
+=item * k
+
+Select the previous timestamp as the active sample.
+
+=item * q
+
+Quit the program.
+
+=item * 1
+
+Sets the action for each sample to the default, which is to view a summary
+of the sample.
+
+=item * 0
+
+Sets the action to just list the files in the sample.
+
+=item * *
+
+Sets the action to view all of the sample's files in the less program.
+
+=back
+
+=head1 OPTIONS
+
+=over
+
+=item --help
+
+Show help and exit.
+
+=item --version
+
+Show version and exit.
+
+=back
+
+=head1 ENVIRONMENT
+
+This tool does not use any environment variables.
+
+=head1 SYSTEM REQUIREMENTS
+
+This tool requires Bash v3 and the following programs: wt-pmp.
+If these programs are not in your PATH, they will be fetched 
+from the Internet if curl is available.
+
+=head1 BUGS
+
+For a list of known bugs, see L<http://www.percona.com/bugs/pt-sift>.
+
+Please report bugs at L<https://jira.percona.com/projects/PT>.
+Include the following information in your bug report:
+
+=over
+
+=item * Complete command-line used to run the tool
+
+=item * Tool L<"--version">
+
+=item * Output from the tool including STDERR
+
+=item * Input files (log/dump/config files, etc.)
+
+=back
+
+If possible, include debugging output by running the tool with C<PTDEBUG>;
+see L<"ENVIRONMENT">.
+
+=head1 DOWNLOADING
+
+Visit L<http://www.percona.com/software/percona-toolkit/> to download the
+latest release of Percona Toolkit.  Or, get the latest release from the
+command line:
+
+   wget percona.com/get/percona-toolkit.tar.gz
+
+   wget percona.com/get/percona-toolkit.rpm
+
+   wget percona.com/get/percona-toolkit.deb
+
+You can also get individual tools from the latest release:
+
+   wget percona.com/get/TOOL
+
+Replace C<TOOL> with the name of any tool.
+
+=head1 AUTHORS
+
+Baron Schwartz
+
+=head1 ABOUT PERCONA TOOLKIT
+
+This tool is part of Percona Toolkit, a collection of advanced command-line
+tools for MySQL developed by Percona.  Percona Toolkit was forked from two
+projects in June, 2011: Maatkit and Aspersa.  Those projects were created by
+Baron Schwartz and primarily developed by him and Daniel Nichter.  Visit
+L<http://www.percona.com/software/> to learn about other free, open-source
+software from Percona.
+
+=head1 COPYRIGHT, LICENSE, AND WARRANTY
+
+This program is copyright 2011-2018 Percona LLC and/or its affiliates,
+2010-2011 Baron Schwartz.
+
+THIS PROGRAM IS PROVIDED "AS IS" AND WITHOUT ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, version 2; OR the Perl Artistic License.  On UNIX and similar
+systems, you can issue `man perlgpl' or `man perlartistic' to read these
+licenses.
+
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+Place, Suite 330, Boston, MA  02111-1307  USA.
+
+=head1 VERSION
+
+sys-sift 0.1.0
+
+=cut
+
+DOCUMENTATION

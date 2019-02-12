@@ -46,6 +46,9 @@ bin/sys-qtunnel-manage
 bin/sys-redis-rdb-backup
 bin/sys-repeat
 bin/sys-shell-type
+bin/sys-sift
+bin/sys-stalk
+bin/sys-summary
 bin/sys-swap
 bin/sys-traffic-capture
 src/sys-mem-eat.c

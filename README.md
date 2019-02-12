@@ -28,6 +28,9 @@ Table of Contents
 * [sys-numa-maps](#sys-numa-maps)
 * [sys-tcp-port-proxy](#sys-tcp-port-proxy)
 * [sys-shell-type](#sys-shell-type)
+* [sys-sift](#sys-sift)
+* [sys-stalk](#sys-stalk)
+* [sys-summary](#sys-summary)
 * [sys-glusterfs-rm](#sys-glusterfs-rm)
 * [sys-google-totp](#sys-google-totp)
 * [sys-traffic-capture](#sys-traffic-capture)
@@ -1692,6 +1695,74 @@ aligns output from other tools to columns.
    1 0    0 5585928    0 2459304  0  0  0  1  0  0  0  0 100  0  0
 ```
 use `--help` option for more usage message.
+
+[Back to TOC](#table-of-contents)
+
+sys-sift
+========
+
+`type: Bash`
+
+Browses files created by wt-stalk.
+
+
+### Usage
+
+fork from [pt-sift](https://www.percona.com/doc/percona-toolkit/LATEST/pt-sift.html). but add the following features:
+```
+1. remove all about MySQL summary info;
+2. add report on tcpdump, tcprstat, perf, disk io, httpstat, netstat.. etc;
+3. remove the pt-pmap, pt-diskstats ... dependencies;
+```
+
+use --help option for more usage message.
+
+[Back to TOC](#table-of-contents)
+
+sys-stalk
+=========
+
+`type: Bash`
+
+Collect forensic data about system when problems occur.
+
+### Usage
+
+fork from [pt-stalk](https://www.percona.com/doc/percona-toolkit/LATEST/pt-stalk.html). but add the following features:
+```
+1. remove all about MySQL summary info;
+2. add tcpdump, tcprstat, numactl, ss ... commands;
+3. add perf support;
+```
+
+use --help option for more usage message.
+
+
+[Back to TOC](#table-of-contents)
+
+sys-summary
+===========
+
+`type: Bash`
+
+Summarize system information nicely.
+
+### Usage
+
+fork from [pt-summary](https://www.percona.com/doc/percona-toolkit/LATEST/pt-summary.html), but add the following features:
+```
+1. fix the file command read symblinks file error;
+2. ignore /lib/libc.so.6 error when load snoopy library;
+3. fix fio-status output parse error;
+4. fix partition error when sort and join doesn't match;
+5. fix process list parse error;
+6. add Centos7/RHEL7 support when parse free command output;
+7. MegaCli support MegaCli and MegaCli64;
+8. add zpool/zfs report;
+9. fix top command output;
+```
+use --help option for more usage message.
+
 
 [Back to TOC](#table-of-contents)
 

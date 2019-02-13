@@ -91,7 +91,7 @@ sub read_string {
         my $item;
         $item->{ip}   = $ip;
         $item->{on}   = $on;
-        push $list->{$k}->{$type}, $item;
+        push @{$list->{$k}->{$type}}, $item;
       }
     }
   }
@@ -120,7 +120,7 @@ sub write_string {
       my $ip = $list->{$k}->{$t}->[0]->{ip};
       my $on = $list->{$k}->{$t}->[0]->{on};
       $dentries{$ip} = [] unless exists $dentries{$ip};
-      push $dentries{$ip}, {dentry => $k, on => $on};
+      push @{$dentries{$ip}}, {dentry => $k, on => $on};
     }
   }
 

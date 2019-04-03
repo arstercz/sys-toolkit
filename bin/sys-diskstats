@@ -91,19 +91,23 @@ sub print_state {
     my ($time, $disk_info) = @_;
     printf("%12s %10.2f%10.2f%10.2f%10.2f%13.2f%10.2f%13.2f%11.2f ms%11.2f ms%11.2f ms%11.2f ms\n", $time,
     $disk_info->{iops}, $disk_info->{rs}, $disk_info->{rs_mer}, $disk_info->{ws},
-    $disk_info->{ws_mer}, $disk_info->{rs_sec}, $disk_info->{ws_sec}, 
+    $disk_info->{ws_mer}, $disk_info->{rs_kB}, $disk_info->{ws_kB}, 
     $disk_info->{e_iot}, $disk_info->{e_iot_w}, $disk_info->{r_t}, $disk_info->{w_t});
 }
 
 # print header info
-printf("%-12s %10s%10s%10s%10s%10s%10s%10s%15s%13s%13s%13s\n",
-    " " x 12, " " x 6 . 'iops', " " x 8 . 'rs', " " x 4 . 'rs_mer', " " x 8 . 'ws', 
-    " " x 7 . 'ws_mer', " " x 4 . 'rs_sec', " " x 7 . 'ws_sec', " " x 3 . 'e_iot', 
-    " " x 3 . 'e_iot_w', " " x 4 . 'r_t', " " x 4 . 'w_t');
+sub print_header {
+    printf("%-12s %10s%10s%10s%10s%10s%10s%10s%15s%13s%13s%13s\n",
+        " " x 12, " " x 6 . 'iops', " " x 8 . 'rs', " " x 4 . 'rs_mer', " " x 8 . 'ws', 
+        " " x 7 . 'ws_mer', " " x 4 . 'rs_kB', " " x 7 . 'ws_kB', " " x 3 . 'e_iot', 
+        " " x 3 . 'e_iot_w', " " x 4 . 'r_t', " " x 4 . 'w_t');
+}
 
 # read /proc/diskstats
 my $n = 100;
 while( $n-- ) {
+    print_header() if ($n % 10 == 9);
+
     open my $fh, '<', '/proc/diskstats' or die "open /proc/diskstats error: $!";
     my $find = 0;
     while(<$fh>) {
@@ -156,11 +160,11 @@ while( $n-- ) {
 
           $disk_per{'rs'}      = round_value( $disk_value{'rs'} / $interval );
           $disk_per{'rs_mer'}  = round_value( $disk_value{'rs_mer'} / $interval );
-          $disk_per{'rs_sec'}  = round_value( $disk_value{'rs_sec'} / $interval );
+          $disk_per{'rs_kB'}  = round_value( $disk_value{'rs_sec'} * 512 / 1024 / $interval );
           $disk_per{'r_t'}     = round_value( $disk_value{'r_t'} / $interval );
           $disk_per{'ws'}      = round_value( $disk_value{'ws'} / $interval );
           $disk_per{'ws_mer'}  = round_value( $disk_value{'ws_mer'} / $interval );
-          $disk_per{'ws_sec'}  = round_value( $disk_value{'ws_sec'} / $interval );
+          $disk_per{'ws_kB'}  = round_value( $disk_value{'ws_sec'} *512 / 1024 / $interval );
           $disk_per{'w_t'}     = round_value( $disk_value{'w_t'} / $interval );
           $disk_per{'iops'}    = round_value( $disk_value{'iops'} / $interval );
           $disk_per{'e_iot'}   = round_value( $disk_value{'e_iot'} / $interval );

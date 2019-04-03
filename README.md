@@ -881,8 +881,8 @@ item list:
    rs_mer   => disk read merged per second
    ws       => disk write per second
    ws_mer   => disk write merged per second
-   rs_sec   => disk sectors read per second
-   ws_sec   => disk sectors write per second
+   rs_kB    => disk kBytes read per second
+   ws_kB    => disk kBytes write per second
    e_iot    => disk io time in ms
    e_iot_w  => disk io time weighted
    r_t      => disk read time in ms

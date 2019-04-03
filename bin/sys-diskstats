@@ -164,7 +164,7 @@ while( $n-- ) {
           $disk_per{'r_t'}     = round_value( $disk_value{'r_t'} / $interval );
           $disk_per{'ws'}      = round_value( $disk_value{'ws'} / $interval );
           $disk_per{'ws_mer'}  = round_value( $disk_value{'ws_mer'} / $interval );
-          $disk_per{'ws_kB'}  = round_value( $disk_value{'ws_sec'} *512 / 1024 / $interval );
+          $disk_per{'ws_kB'}  = round_value( $disk_value{'ws_sec'} * 512 / 1024 / $interval );
           $disk_per{'w_t'}     = round_value( $disk_value{'w_t'} / $interval );
           $disk_per{'iops'}    = round_value( $disk_value{'iops'} / $interval );
           $disk_per{'e_iot'}   = round_value( $disk_value{'e_iot'} / $interval );

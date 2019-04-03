@@ -862,7 +862,7 @@ read more from kernel Documentation/iostats.txt
 
 ```
 $ ./sys-diskstats -d sda3 -i 5
-                   iops        rs    rs_mer        ws       ws_mer    rs_sec       ws_sec          e_iot      e_iot_w          r_t          w_t
+                   iops        rs    rs_mer        ws       ws_mer    rs_kB       ws_kB          e_iot      e_iot_w          r_t          w_t
     19:32:36      98.00      0.00      0.00     98.00         0.40      0.00       574.20       6.60 ms       6.60 ms       0.00 ms       6.60 ms
     19:32:41     331.40      0.00      0.00    331.40         0.00      0.00      9550.20      19.20 ms      33.00 ms       0.00 ms      33.00 ms
     19:32:46      90.60      0.00      0.00     90.60         0.80      0.00       570.20       3.00 ms       3.00 ms       0.00 ms       3.20 ms

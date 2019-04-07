@@ -16,7 +16,7 @@ Table of Contents
 * [sys-easyhosts](#sys-easyhosts)
 * [sys-ipton](#sys-ipton)
 * [sys-lock-run](#sys-lock-run)
-* [sys-log-syslog](#sys-log-syslog)
+* [sys-logtail](#sys-logtail)
 * [sys-swap](#sys-swap)
 * [sys-repeat](#sys-repeat)
 * [sys-daemon](#sys-daemon)

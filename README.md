@@ -1549,7 +1549,7 @@ All the check are based on [Broadcom's](https://www.broadcom.com/) `MegaCli` com
 
 [Back to TOC](#table-of-contents)
 
-sys-log-tail
+sys-logtail
 ==============
 
 `type: shell`

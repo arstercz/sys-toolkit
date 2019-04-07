@@ -1549,26 +1549,23 @@ All the check are based on [Broadcom's](https://www.broadcom.com/) `MegaCli` com
 
 [Back to TOC](#table-of-contents)
 
-sys-log-syslog
+sys-log-tail
 ==============
 
 `type: shell`
 
-extra the log file from last checkpoint and send needed level message to syslog server.
+Read the log file from last checkpoint, it's useful when analsis log file with a incrementally way.
 
 ### Usage
 ```
-# send the redis log which regexp the ' # ' lines to the syslog message.
-# ./sys-log-syslog -f /opt/redis4.0/log/redis.log -t redis6381 -r '\s+#\s+' -d
-2018_05_10_18_02_11 [info] logger send ok
-
-# ./sys-log-syslog -f /opt/redis4.0/log/redis.log -t redis6381 -r '\s+#\s+' -d        
-2018_05_10_18_02_13 [warn] redis log no change
+$ echo 1 >/tmp/t.log
+$ wt-logtail -f /tmp/t.log 
+1
+$ echo 2 >>/tmp/t.log        
+$ wt-logtail -f /tmp/t.log 
+2
 ```
-
-*note*: you can not use -s option if your system's logger command does not support -n option. and the -r option shuld be use Perl regular expression.
-
-use --help option to read more.
+use `--help` option for more usage message.
 
 [Back to TOC](#table-of-contents)
 

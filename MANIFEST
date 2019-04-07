@@ -18,7 +18,7 @@ bin/sys-google-totp
 bin/sys-ipton
 bin/sys-kill-close-wait
 bin/sys-lock-run
-bin/sys-log-syslog
+bin/sys-logtail
 bin/sys-memory-maps
 bin/sys-mem-redis-summary
 bin/sys-memcached-check

@@ -113,6 +113,7 @@ log_output() {
     my $content;
     sysread $fh, $content, $ENV{DIFFSIZE};
     print $content;
+    close $fh;
   ' | grep -P "$4"
 }
 

@@ -52,6 +52,7 @@ Table of Contents
 * [sys-mysql-block-account](#sys-mysql-block-account)
 * [sys-mysql-health](#sys-mysql-health)
 * [sys-mysql-createdb](#sys-mysql-createdb)
+* [sys-mysql-purge-binlog](#sys-mysql-purge-binlog)
 * [sys-mysql-qps](#sys-mysql-qps)
 * [sys-mysql-repl](#sys-mysql-repl)
 * [sys-mysql-set-maxconnections](#sys-mysql-set-maxconnections)
@@ -1762,6 +1763,73 @@ use --help option for more usage message.
 
 
 [Back to TOC](#table-of-contents)
+
+sys-mysql-purge-binlog
+======================
+
+`type: Perl`
+
+purge MySQL binary logs, you can retain binlog files by count or hours type. the option `retain` is integer value, default is 5, it retain number files if `type` is count, retain about number hours files if `type` is hour. 
+
+the connect user must have `super`, `process`, `replication_client` privileges. option `--host` can be set both master and slave ip address, `--host` and `--port` option must be slave info if master and slave have different port:
+```
+$ wt-mysql-purge-binlog --host 10.0.21.5 --port 3301 --user monitor --askpass --purge --type count --retain 2
+Enter password : 
+2019-05-09T18:43:11 [purge check] mysql replication status:
+  +-10.0.21.5:3301
+  version             5.6.38-83.0-log
+  server_id           1379557
+  has_gtid            0
+  binlog_enable       1
+  tx_isolation        REPEATABLE-READ
+  binlog_format       MIXED
+  charset             utf8
+  max_packet          1024MB
+  read_only           0
+    +-10.0.21.7:3301
+    version             5.6.38-83.0-log
+    server_id           1445093
+    has_gtid            0
+    binlog_enable       1
+    tx_isolation        REPEATABLE-READ
+    binlog_format       MIXED
+    relay_master_file   mysql-bin.000083
+    relay_behind_second 0
+    charset             utf8
+    max_packet          1024MB
+    read_only           0
+    repl_check          OK
+2019-05-09T18:43:11 retain 2 binary logs is approximate to purge before mysql-bin.000081
+2019-05-09T18:43:11 purge binary logs to mysql-bin.000081 ok!
+
+$ wt-mysql-purge-binlog --host 10.0.21.5 --port 3301 --user monitor --askpass --purge --type hour --retain 3     
+Enter password : 
+2019-05-09T18:43:25 [purge check] mysql replication status:
+  +-10.0.21.5:3301
+  version             5.6.38-83.0-log
+  server_id           1379557
+  has_gtid            0
+  binlog_enable       1
+  tx_isolation        REPEATABLE-READ
+  binlog_format       MIXED
+  charset             utf8
+  max_packet          1024MB
+  read_only           0
+    +-10.0.21.7:3301
+    version             5.6.38-83.0-log
+    server_id           1445093
+    has_gtid            0
+    binlog_enable       1
+    tx_isolation        REPEATABLE-READ
+    binlog_format       MIXED
+    relay_master_file   mysql-bin.000083
+    relay_behind_second 0
+    charset             utf8
+    max_packet          1024MB
+    read_only           0
+    repl_check          OK
+```
+use `--help` option for more usage message.
 
 License
 =======

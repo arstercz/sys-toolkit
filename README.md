@@ -1773,7 +1773,7 @@ purge MySQL binary logs, you can retain binlog files by count or hours type. the
 
 the connect user must have `super`, `process`, `replication_client` privileges. option `--host` can be set both master and slave ip address, `--host` and `--port` option must be slave info if master and slave have different port:
 ```
-$ wt-mysql-purge-binlog --host 10.0.21.5 --port 3301 --user monitor --askpass --purge --type count --retain 2
+$ sys-mysql-purge-binlog --host 10.0.21.5 --port 3301 --user monitor --askpass --purge --type count --retain 2
 Enter password : 
 2019-05-09T18:43:11 [purge check] mysql replication status:
   +-10.0.21.5:3301
@@ -1802,7 +1802,7 @@ Enter password :
 2019-05-09T18:43:11 retain 2 binary logs is approximate to purge before mysql-bin.000081
 2019-05-09T18:43:11 purge binary logs to mysql-bin.000081 ok!
 
-$ wt-mysql-purge-binlog --host 10.0.21.5 --port 3301 --user monitor --askpass --purge --type hour --retain 3     
+$ sys-mysql-purge-binlog --host 10.0.21.5 --port 3301 --user monitor --askpass --purge --type hour --retain 3     
 Enter password : 
 2019-05-09T18:43:25 [purge check] mysql replication status:
   +-10.0.21.5:3301
@@ -1828,6 +1828,7 @@ Enter password :
     max_packet          1024MB
     read_only           0
     repl_check          OK
+2019-05-09T18:43:25 master generate 0 binlog files at per hours
 ```
 use `--help` option for more usage message.
 

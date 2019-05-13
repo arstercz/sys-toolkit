@@ -31,6 +31,7 @@ bin/sys-mysql-error
 bin/sys-mysql-health
 bin/sys-mysql-kill-blocked-thread
 bin/sys-mysql-kill-long-query
+bin/sys-mysql-purge-binlog
 bin/sys-mysql-qps
 bin/sys-mysql-repl
 bin/sys-mysql-search

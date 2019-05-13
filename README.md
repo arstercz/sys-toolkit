@@ -1832,6 +1832,8 @@ Enter password :
 ```
 use `--help` option for more usage message.
 
+[Back to TOC](#table-of-contents)
+
 License
 =======
 

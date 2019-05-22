@@ -36,6 +36,7 @@ my $verbose  = 0;
 my $help     = 0;
 my $recurse  = 0;
 my $slave    = 0; #purge slave host
+my $lockfile = '/tmp/mysql_binlog_purge.check';
 my $charset  = 'utf8';
 
 GetOptions(
@@ -53,6 +54,7 @@ GetOptions(
     "help!"        => \$help,
     "recurse|r!"   => \$recurse,
     "slave!"       => \$slave,
+    "lockfile"     => \$lockfile,
 ) or die "error:$!";
 
 if ($help) {
@@ -102,6 +104,40 @@ sub noecho_password {
         die "Cannot read respose; is Term::ReadKey installed? $EVAL_ERROR";
     }
     return $response;
+}
+
+sub lockfile_is_ok {
+    unless (-e $lockfile) {
+        return 1;
+    }
+
+    if ($type eq 'count') {
+        return 1;
+    }
+
+    my ($f_mtime) = (stat("$lockfile"))[9];
+    if((time - $f_mtime) < $retain * 3600) {
+        time_msg("last execution was less than $retain hours! skip...");
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
+sub lockfile_set {
+    my $msg  = shift;
+    my $time = strftime("%Y-%m-%dT%H:%M:%S", localtime(time));
+    open my $fp, ">>", $lockfile
+         or time_msg("lockfile_set $lockfile error: $!");
+
+    if( flock($fp, 2) ) {  # LOCK_EX
+        print $fp "[$time] $msg\n";
+    }
+    else {
+        sleep 1;
+        print $fp "[$time] $msg\n";
+    }
+    close $fp;
 }
 
 sub binlog_identify {
@@ -157,15 +193,24 @@ sub get_meta_status {
         $meta{master}{bmax} = $bmax;
         $meta{master}{bnum} = $bnum;
         $meta{master}{expire_days} = $host_info->{$k}->{expire_days} || 0;
-        $meta{master}{rfile} = "$bmax"; 
+        $meta{master}{rfile} = "$bmin"; 
 
+        if (!$slave && !$host_info->{$k}->{slave}) {
+            time_msg("$k does not have slave, exit..");
+            exit 1;
+        }
         next if $slave; # ignore if purge the slave binary logs;
         # calculate the middle line
         foreach my $s (keys %{$host_info->{$k}->{slave}}) {
+            if ($host_info->{$k}->{slave}->{$s}->{repl_check} ne 'OK') {
+               time_msg("slave replication check of $s is not OK, exit..");
+               exit 1;
+            }
+
             my $relay_file = "";
             $relay_file = $host_info->{$k}->{slave}->{$s}->{relay_master_file};
             # get the smallest binary file
-            if (convert_int($meta{master}{rfile}) > convert_int($relay_file)) {
+            if (convert_int($meta{master}{rfile}) < convert_int($relay_file)) {
                 $meta{master}{rfile} = $relay_file;
             }
         }
@@ -203,6 +248,10 @@ sub purge_master_binlog {
     }
 
     if ($type eq "hour") {
+        #check lockfile to avoid frequently execute;
+        unless (lockfile_is_ok()) {
+            exit 0;
+        }
         my $bin_avg = 
             calc_interval($meta->{master}->{expire_days}, $meta->{master}{bnum});
         time_msg("master generate $bin_avg binlog files at per hours");
@@ -230,6 +279,8 @@ sub purge_master_binlog {
     else {
         time_msg("purge binary logs to $calc_binlog_file error!");
     }
+
+    lockfile_set("type:$type, retain: $retain, purge " . $meta->{master}->{host} . ":" . $meta->{master}->{port});
 
     $dbhelper->{dbh}->disconnect;
 }
@@ -416,11 +467,15 @@ whether recursion find slave or not, defaults no.
 
 purge slave binary logs, this need the host and port must be slave info.
 
+=item lockfile
+
+add lockfile to skip frequently execute and record execute info.
+
 =back
 
 =head1 AUTHOR
 
-chenzhe07@gmail.com
+chenzhe07@pwrd.com
 
 =head1 CHANGELOG
 

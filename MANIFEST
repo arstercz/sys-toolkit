@@ -55,3 +55,4 @@ bin/sys-traffic-capture
 src/sys-mem-eat.c
 src/sys-mysql-sql-reject.c
 src/sys-tcp-port-proxy.c
+src/sys-unmap-file.c

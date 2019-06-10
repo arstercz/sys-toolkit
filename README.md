@@ -41,6 +41,7 @@ Table of Contents
 * [sys-redis-rdb-backup](#sys-redis-rdb-backup)
 * [sys-dns-response-time](#sys-dns-response-time)
 * [sys-kill-close-wait](#sys-kill-close-wait)
+* [sys-unmap-file](#sys-unmap-file)
 * [sys-mem-eat](#sys-mem-eat)
 * [sys-memory-maps](#sys-memory-maps)
 * [sys-memcached-check](#sys-memcached-check)
@@ -1833,6 +1834,30 @@ Enter password :
 use `--help` option for more usage message.
 
 [Back to TOC](#table-of-contents)
+
+sys-unmap-file
+==============
+
+`type: c`
+
+unmap a file from file system cache, read more from [unmap_mysql_logs](https://github.com/yoshinorim/unmap_mysql_logs).
+
+### Usage
+```
+$ free -m
+              total          used        free      shared  buff/cache   available
+              Mem:          64216       22761        3188        3210       38266       37630
+
+$ sys-unmap-file -f /var/lib/mysql/data/mysql-bin.000087 -n 90 -s
+
+$ free -m
+              total          used        free      shared  buff/cache   available
+              Mem:          64216       22760        3937        3210       37518       37631
+```
+use `-h` option to read more usage.
+
+
+[Back_to_TOC](#table-of-contents)
 
 License
 =======

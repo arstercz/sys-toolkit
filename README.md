@@ -1845,14 +1845,14 @@ unmap a file from file system cache, read more from [unmap_mysql_logs](https://g
 ### Usage
 ```
 $ free -m
-              total          used        free      shared  buff/cache   available
-              Mem:          64216       22761        3188        3210       38266       37630
+            total          used        free      shared  buff/cache   available
+Mem:          64216       22761        3188        3210       38266       37630
 
 $ sys-unmap-file -f /var/lib/mysql/data/mysql-bin.000087 -n 90 -s
 
 $ free -m
-              total          used        free      shared  buff/cache   available
-              Mem:          64216       22760        3937        3210       37518       37631
+            total          used        free      shared  buff/cache   available
+Mem:          64216       22760        3937        3210       37518       37631
 ```
 use `-h` option to read more usage.
 

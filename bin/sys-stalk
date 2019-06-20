@@ -1069,7 +1069,7 @@ purge_samples() {
    if [ "$OPT_PREFIX" ]; then
        pattern=$OPT_PREFIX
    fi
-   find "$dir"  -type f -mtime +$retention_time -exec rm -f '{}' \;
+   find "$dir" -warn -name "$pattern" -type f -mtime +$retention_time -exec rm -f '{}' \;
 
    local oprofile_dir="/var/lib/oprofile/samples"
    if [ -d "$oprofile_dir" ]; then

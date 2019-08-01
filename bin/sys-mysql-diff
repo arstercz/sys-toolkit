@@ -722,7 +722,7 @@ sub _parse {
     @lines = grep ! m{^/\*!40\d{3} .*? \*/;}, @lines;
     @lines = grep ! m{^(SET |DROP TABLE)}, @lines;
 
-    if ($lines[0] =~ /^\s*create\s+table\s+(\S+)\s+\(\s*$/i) {
+    if ($lines[0] =~ /^\s*create\s+(?:table|sequence)\s+(\S+)\s+\(\s*$/i) {
         $self->{table_name} = $1;
         shift @lines;
     }

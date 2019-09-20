@@ -18,6 +18,7 @@ DBD::mysql
 Term::ReadKey
 Net::DNS
 Digest::HMAC
+IO::Socket::Timeout
 ```
 
 some shell tools need the following commands:

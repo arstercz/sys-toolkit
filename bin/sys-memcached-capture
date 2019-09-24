@@ -8,9 +8,10 @@
 main() {
   for o; do
     case "${o}" in
-      -p)    shift; OPT_PORT="$1"; shift; ;;
-      -i)    shift; OPT_INET="$1"; shift; ;;
-      -d)    shift; OPT_DIR="$1"; shift; ;;
+      -p)    shift; OPT_PORT="$1";  shift; ;;
+      -i)    shift; OPT_INET="$1";  shift; ;;
+      -d)    shift; OPT_DIR="$1";   shift; ;;
+      -e)    shift; OPT_EXTRA="$1"; shift; ;;
       -h)    perl -00 -ne 'm/^\s+Usage:/ && print' "$0"; exit 0; ;;
       -*)    echo "Unknown option $1 . try --help."; exit 1; ;;
     esac
@@ -19,11 +20,16 @@ main() {
   OPT_PORT="${OPT_PORT:-11211}"
   OPT_INET="${OPT_INET:-any}"
   OPT_DIR="${OPT_DIR:=/tmp}"
+  OPT_EXTRA="${OPT_EXTRA:=""}"
 
   CMD_TCPDUMP="${CMD_TCPDUMP:-"$(_which tcpdump)"}"
   if [ "$CMD_TCPDUMP"x == "x" ]; then
     echo "can not find tcpdump command!"
     exit 1
+  fi
+
+  if [ "$OPT_EXTRA"x != "x" ]; then
+    OPT_EXTRA+=" and "
   fi
 
   echo "- start tcpdump ..."
@@ -33,7 +39,7 @@ main() {
   # only capture data length greater than 0.
   start_command "$CMD_TCPDUMP -nn -i $OPT_INET -A -s 65535 \
                 -w $OPT_DIR/$TS-$OPT_PORT-memcached.pcap -U \
-                \"dst port $OPT_PORT and \
+                \"$OPT_EXTRA dst port $OPT_PORT and \
                  (((ip[2:2] - ((ip[0]&0xf)<<2)) - ((tcp[12]&0xf0)>>2)) != 0)\""
 
   trap onexit INT
@@ -104,6 +110,7 @@ sys-memcached-capture - capture the memcached traffic and parse the item list.
       -p OPT_PORT    memcached port, default is 11211.
       -i OPT_INET    interface that memcached listend, default is any.
       -d OPT_DIR     the directory that can store the tcpdump file, default is /tmp.
+      -e OPT_EXTRA   extra tcpdump rule.
       -h OPT_HELP    print help message
   sys-memcached-capture must use the tcpdump command.
 

@@ -1658,7 +1658,7 @@ capture memcached traffic and parsed to get item list.
 
 ### Usage
 ```
-$ sys-memcached-capture -p 11212 -i 
+$ sys-memcached-capture -p 11212 -i eth0 -e 'src 10.0.21.5'
 - start tcpdump ...
 - use 'Crtl+c' to stop!
 tcpdump: listening on any, link-type LINUX_SLL (Linux cooked), capture size 65535 bytes
@@ -1672,7 +1672,7 @@ tcpdump: listening on any, link-type LINUX_SLL (Linux cooked), capture size 6553
   2018-12-10 12:03:10.103213 - get msg
   2018-12-10 12:03:13.430215 - delete msg
 ```
-use `-h` option for more usage message.
+`-e` is optional, use `-h` option for more usage message.
 
 [Back to TOC](#table-of-contents)
 

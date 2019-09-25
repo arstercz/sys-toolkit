@@ -1622,10 +1622,10 @@ default port is the L<"--program-pid"> that listen on.
 
 =item --check-url
 
-type: string; default: https://user.laohu.com
+type: string; default: https://blog.arstercz.com
 
 Get url's statistics by sys-httpstat command. default is to check
-https://user.laohu.com, sys-httpstat will ignore the ssl trust error.
+https://blog.arstercz.com, sys-httpstat will ignore the ssl trust error.
 
 =item --disk-bytes-free
 

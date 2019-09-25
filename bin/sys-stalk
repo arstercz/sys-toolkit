@@ -731,11 +731,16 @@ CMD_TCPDUMP="${CMD_TCPDUMP:-"$(_which tcpdump)"}"
 CMD_VMSTAT="${CMD_VMSTAT:-"$(_which vmstat)"}"
 CMD_DMESG="${CMD_DMESG:-"$(_which dmesg)"}"
 CMD_NUMACTL="${CMD_NUMACTL:-"$(_which numactl)"}"
-CMD_NUMA_MAPS="${CMD_NUMA_MAPS:-"$(_which wt-numa-maps)"}"
+CMD_NUMASTAT="${CMD_NUMASTAT:-"$(_which numastat)"}"
+CMD_NUMA_MAPS="${CMD_NUMA_MAPS:-"$(_which sys-numa-maps)"}"
 CMD_PERF="${CMD_PERF:-"$(_which perf)"}"
-CMD_HTTPSTAT="${CMD_HTTPSTAT:-"$(_which wt-httpstat)"}"
+CMD_HTTPSTAT="${CMD_HTTPSTAT:-"$(_which sys-httpstat)"}"
 CMD_TCPRSTAT="${CMD_TCPRSTAT:-"$(_which tcprstat-static)"}"
-CMD_CHECKPORT="${CMD_CHECKPORT:-"$(_which wt-checkport)"}"
+CMD_CHECKPORT="${CMD_CHECKPORT:-"$(_which sys-checkport)"}"
+CMD_DMIDECODE="${CMD_DMIDECODE:-"$(_which dmidecode)"}"
+CMD_GETCONF="${CMD_GETCONF:-"$(_which getconf)"}"
+CMD_AUDITCTL="${CMD_AUDITCTL:-"$(_which auditctl)"}"
+CMD_LSPCI="${CMD_LSPCI:-"$(_which lspci)"}"
 
 [ -z "$CMD_SYSCTL" -a -x "/sbin/sysctl" ] && CMD_SYSCTL="/sbin/sysctl"
 
@@ -811,6 +816,7 @@ collect() {
    fi
 
    ps -eaF  >> "$d/$p-ps"  &
+   ps -eo pid,ppid,tid,user,class,rtprio,ni,pri,psr,pcpu,time,vsz,rss,stat,lstart,etime,wchan:25,comm -m >> "$d/$p-ps-eo"
 
    [ "$process_pid" ] && _lsof $process_pid >> "$d/$p-lsof" &
 
@@ -825,8 +831,13 @@ collect() {
    fi
 
    if [ "$CMD_NUMACTL" ]; then
-      $CMD_NUMACTL --show >> "$d/$p-numactl"
-      $CMD_NUMACTL --hardware >> "$d/$p-numactl"
+      $CMD_NUMACTL --show >> "$d/$p-numainfo"
+      echo "================" >> "$d/$p-numainfo" 
+      $CMD_NUMACTL --hardware >> "$d/$p-numainfo"
+      if [ "$CMD_NUMASTAT" ]; then
+        echo "================" >> "$d/$p-numainfo"
+        $CMD_NUMASTAT -n -m >> "$d/$p-numainfo"
+      fi
    fi
 
    if [ "$CMD_NUMA_MAPS" ]; then
@@ -846,7 +857,34 @@ collect() {
       $CMD_MPSTAT -P ALL $OPT_SLEEP_COLLECT $cnt >> "$d/$p-mpstat" &
       $CMD_MPSTAT -P ALL $OPT_RUN_TIME 1 >> "$d/$p-mpstat-overall" &
    fi
+   if [ "$CMD_DMIDECODE" ]; then
+      $CMD_DMIDECODE >> "$d/$p-dmidecode" &
+   fi
+   if [ "$CMD_GETCONF" ]; then
+      $CMD_GETCONF -a >> "$d/$p-getconf" &
+   fi
+   if [ "$CMD_AUDITCTL" ]; then 
+      $CMD_AUDITCTL -s >> "$d/$p-audit" &
+      $CMD_AUDITCTL -l >> "$d/$p-audit" &
+   fi
+   if [ "$CMD_LSPCI" ]; then
+      $CMD_LSPCI -vv >> "$d/$p-lspci" &
+   fi
+
    top -bn$cnt -d 1 >> "$d/$p-top" &
+   ifconfig >> "$d/$p-ifconfig" &
+   route -n >> "$d/$p-ifconfig" &
+   rpm -q -a >> "$d/$p-rpmlist" &
+   mount -v >> "$d/$p-mount" &
+   uname -a >> "$d/$p-uname" &
+   cat /etc/fstab >> "$d/$p-fstab" 2>&1 &
+   cat /etc/*release >> "$d/$p-release" 2>&1 &
+   cat /proc/cmdline >> "$d/$p-cmdline" 2>&1 &
+   cat /proc/devices >> "$d/$p-devices" 2>&1 &
+   cat /proc/cpuinfo >> "$d/$p-cpuinfo" 2>&1 &
+   cat /proc/kallsyms >> "$d/$p-kallsyms" 2>&1 &
+
+   
 
    # max is 60 seconds
    local PERF_TIME=$OPT_RUN_TIME
@@ -1586,8 +1624,8 @@ default port is the L<"--program-pid"> that listen on.
 
 type: string; default: https://user.laohu.com
 
-Get url's statistics by wt-httpstat command. default is to check
-https://user.laohu.com, wt-httpstat will ignore the ssl trust error.
+Get url's statistics by sys-httpstat command. default is to check
+https://user.laohu.com, sys-httpstat will ignore the ssl trust error.
 
 =item --disk-bytes-free
 
@@ -1896,6 +1934,8 @@ Specifically, the variables that can be set are:
 =item CMD_PERF
 
 =item CMD_HTTPSTAT
+
+=item CMD_DMIDECODE
 
 =back
 

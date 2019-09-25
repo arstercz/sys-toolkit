@@ -506,8 +506,8 @@ size_to_bytes() {
 # ###########################################################################
 
 TOOL="sys-sift"
-if [ -d "/var/lib/wt-stalk" ]; then
-   BASEDIR="/var/lib/wt-stalk"
+if [ -d "/var/lib/sys-stalk" ]; then
+   BASEDIR="/var/lib/sys-stalk"
 else
    BASEDIR="$PWD"
 fi
@@ -956,7 +956,7 @@ main() {
          BASEDIR="$(dirname "$1")"
          PREFIX="$(echo "$1" | perl -ne '$_ =~ m/([\d_]+)/; print $1;')"
       else
-         echo "Error: $1 is not a directory, and there are no wt-stalk files in the curent working directory ($BASEDIR) with a $1 prefix." >&2
+         echo "Error: $1 is not a directory, and there are no sys-stalk files in the curent working directory ($BASEDIR) with a $1 prefix." >&2
          echo "For more information, 'man pt-sift' or 'perldoc $0'." >&2
          exit 1
       fi
@@ -964,10 +964,10 @@ main() {
 
    # If the programs we need don't exist, try to get them.
    # Percona Toolkit tools:
-   for prog in wt-align; do
+   for prog in sys-align; do
       # A var can't be named "PR_pt-pmp" so we chop of "pt-" to get
       # the program's basename, resulting in "PR_pmp".
-      prog_base=${prog#"wt-"}
+      prog_base=${prog#"sys-"}
       if which "$prog" >/dev/null 2>&1 ; then
          eval "PR_$prog_base"="$(which "$prog")"
       elif [ -f "$prog" -a -x "$prog" ]; then
@@ -987,7 +987,7 @@ main() {
       ls *-output 2>/dev/null | cut -d- -f1 | sort > "$PT_TMPDIR/sys-sift.prefixes" 
    )
    if [ ! -s "$PT_TMPDIR/sys-sift.prefixes" ]; then
-      echo "Error: There are no wt-stalk files in $BASEDIR" >&2
+      echo "Error: There are no sys-stalk files in $BASEDIR" >&2
       echo "For more information, 'man sys-sift' or 'perldoc $0'." >&2
       exit 1
    fi
@@ -1334,19 +1334,19 @@ fi
 
 =head1 NAME
 
-sys-sift - Browses files created by wt-stalk.
+sys-sift - Browses files created by sys-stalk.
 
 =head1 SYNOPSIS
 
 Usage: sys-sift FILE|PREFIX|DIRECTORY
 
-sys-sift browses files created by L<wt-stalk>.  If no options are given,
-the tool browses all wt-stalk files in C</var/lib/wt-stalk> if that directory
+sys-sift browses files created by L<sys-stalk>.  If no options are given,
+the tool browses all sys-stalk files in C</var/lib/sys-stalk> if that directory
 exists, else the current working directory is used.  If a FILE is given,
 the tool browses files with the same prefix in the given file's directory.
-If a PREFIX is given, the tool browses files in C</var/lib/wt-stalk>
+If a PREFIX is given, the tool browses files in C</var/lib/sys-stalk>
 (or the current working directory) with the same prefix.  If a DIRECTORY
-is given, the tool browses all wt-stalk files in it.
+is given, the tool browses all sys-stalk files in it.
 
 =head1 RISKS
 
@@ -1369,7 +1369,7 @@ server.  Before using this tool, please:
 =head1 DESCRIPTION
 
 sys-sift makes a list of the unique timestamp prefixes of all the files in
-the directory, as written by the L<wt-stalk> tool.  If the user specified
+the directory, as written by the L<sys-stalk> tool.  If the user specified
 a timestamp on the command line, then it begins with that sample of data;
 otherwise it begins by showing a list of the timestamps and prompting for
 a selection.  Thereafter, it displays a summary of the selected sample, and
@@ -1435,7 +1435,7 @@ This tool does not use any environment variables.
 
 =head1 SYSTEM REQUIREMENTS
 
-This tool requires Bash v3 and the following programs: wt-pmp.
+This tool requires Bash v3 and the following programs: sys-pmp.
 If these programs are not in your PATH, they will be fetched 
 from the Internet if curl is available.
 

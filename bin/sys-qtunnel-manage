@@ -110,8 +110,8 @@ list_tags() {
         foreach my $k (sort keys %n) {
           my $faddr = $n{$k}{faddr};
           my $baddr = $n{$k}{baddr};
-          my $mode  = $n{$k}{mode};
-          printf "%18s - mode: %6s; %21s --> %-21s\n", 
+          my $mode  = $n{$k}{mode} || "server";
+          printf "%30s - mode: %6s; %21s --> %-21s\n", 
                  $k, $mode, $faddr, $baddr; 
         }
       }

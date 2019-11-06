@@ -102,7 +102,7 @@ sub round_value {
 
 sub print_state {
     my ($time, $state_info) = @_;
-    printf("%s:%d %-10s| %6d%6d%6d%6d%7d | %8d%8d%8d%8d | %4d%5d%5d | %10d bytes%10d bytes\n",
+    printf("%s:%d %-10s| %6d%6d%6d%6d%7d  | %8d%8d%8d%8d | %4d%5d%5d | %10d bytes%10d bytes\n",
     $host, $port, $time, $state_info->{ins}, $state_info->{upd}, $state_info->{del}, 
     $state_info->{sel}, $state_info->{qps}, $state_info->{rins}, $state_info->{rupd}, 
     $state_info->{rdel}, $state_info->{rread}, $state_info->{run}, $state_info->{conn}, 
@@ -177,12 +177,13 @@ print   " " x $addr_len . "|"
        . "\n";
 
 sub print_header {
-  printf("%s%-12s|%7s%6s%6s%7s%7s | %8s%8s%8s%8s | %4s%5s%5s | %-15s%-15s\n",
-       " " x ($addr_len - 20) . 'addr' . " " x 4, 'time','ins', 'upd', 'del', 'sel', 'qps', 
+  my $addr_len = shift;
+  printf("%s%12s|%7s%6s%6s%7s%7s | %8s%8s%8s%8s | %4s%5s%5s | %-15s%-15s\n",
+       " " x ($addr_len - 20) . 'addr' . " " x 4, 'time' . " " x 4, 'ins', 'upd', 'del', 'sel', 'qps', 
        'ins', 'upd', 'del', 'read', 'run', 'conn', 'cre', " " x 5 . 'recv', " " x 5 . 'send');
 }
 
-print_header();
+print_header($addr_len);
 
 my $n = $loop;
 while ($n--) {
@@ -247,7 +248,7 @@ while ($n--) {
    }
    if ($n < $loop - 1) {
        print_state( get_time(), \%db_state );
-       print_header() if $n % 20 == 0;
+       print_header($addr_len) if $n % 20 == 0;
    }
    sleep $interval;
 }

@@ -1,0 +1,356 @@
+#!/usr/bin/env perl
+# list the service that need restart.
+# only support systemd service.
+# arsterc 2019-11-13
+
+=head1 NAME
+
+sys-needrestart - check and report the need restart services.
+
+=cut
+
+=head1 SYNOPSIS
+
+    use sys-needrestart --help for more info.
+
+    options:
+       list|l    : list the need restart services.
+       pid|p     : only check the pid.
+       verbose|v : print more verbose message.
+       help|h    : print help message.
+
+    note: sys-needcheck doesn't support auto restart service.
+          and the host must running in systemd service.
+
+    almost of the check method is reference from https://github.com/liske/needrestart
+
+=cut
+
+use strict;
+use warnings;
+use Data::Dumper;
+use Getopt::Long;
+
+my $list = 1;
+my $pid;
+my ($help, $verbose);
+
+GetOptions(
+  "list|l!"    => \$list,
+  "pid|p=i"    => \$pid,
+  "help|h"     => \$help,
+  "verbose|v!" => \$verbose,
+);
+
+sub usage {
+  my $name = shift;
+  system("perldoc $name");
+  exit 0;
+}
+
+if ($help) {
+  usage($0);
+}
+
+# check uid
+my $uid = $<;
+if ($< != 0) {
+  print "[note] $0 must running in root mode..\n";
+  exit 0;
+}
+
+# get current runlevel, default is 2
+my $runlevel = `who -r` || '';
+$runlevel = 2 unless ($runlevel =~ s/^.+run-level\s+(\S)\s+.+/$1/);
+
+my $is_systemd = -d "/run/systemd/system";
+my $is_vm;
+
+if($is_systemd && -x q(/usr/bin/systemd-detect-virt)) {
+  my $ret = system(qw(/usr/bin/systemd-detect-virt --vm --quiet));
+  unless ($? == -1 || $? & 127) {
+    $is_vm = ($? >> 8) == 0;
+  }
+}
+else {
+  print "[warn] - this host is not running in systemd env!";
+  exit 1;
+}
+
+sub is_digit {
+  my $k = shift;
+  if ($k =~ /^\d+$/) {
+    return 1;
+  }
+  return 0;
+}
+
+sub is_pid {
+  my $key = shift;
+  foreach my $k (split('', $key)) {
+    if (!is_digit($k)) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+sub pid_exists {
+  my $pid = shift;
+
+  # or use the `kill 0, $pid` to check pid is alive
+  if (-d "/proc/$pid") {
+    return 1;
+  }
+  return 0;
+}
+
+sub read_file {
+  my $fname = shift;
+
+  open my $fh, '<', "$fname"
+    or return undef;
+
+  my @result = <$fh>;
+  close $fh;
+
+  return \@result;
+}
+
+sub get_proc_cmdline {
+  my $pid = shift;
+  my $list_ref = read_file("/proc/$pid/cmdline");
+
+  return join('', @$list_ref);
+}
+
+sub is_orphaned {
+  my $pid = shift;
+  my $exe = readlink("/proc/$pid/exe");
+
+  if (defined($exe) && $exe =~ /\(delete\)/) {
+    print "$pid is orphaned process" if $verbose;
+    return 1;
+  }
+  return 0;
+}
+
+sub get_proc_status {
+  my $pid = shift;
+  my $list_ref = read_file("/proc/$pid/status");
+  my %proc_props;
+  foreach my $k (@$list_ref) {
+    chomp($k);
+    if ($k =~ /^Name:\s+(\S+)$/) {
+      $proc_props{name} = $1;
+    }
+    if ($k =~ /^Umask:\s+(\S+)$/) {
+      $proc_props{umask} = $1;
+    }
+    if ($k =~ /^Pid:\s+(\d+)$/) {
+      $proc_props{pid} = $1;
+    }
+    if ($k =~ /^PPid:\s+(\d+)/) {
+      $proc_props{ppid} = $1;
+    }
+    if ($k =~ /^Uid:\s+(.+)$/) {
+      my @ids = split(/\s+/, $1);
+      $proc_props{uid}  = $ids[0];
+      $proc_props{euid} = $ids[1];
+      $proc_props{username} = get_username($ids[0]);
+    }
+    if ($k =~ /^Gid:\s+(.+)$/) {
+      my @gids = split(/\s+/, $1);
+      $proc_props{gid}  = $gids[0];
+      $proc_props{egid} = $gids[1];
+    }
+  }
+
+  $proc_props{args} = get_proc_cmdline($pid);
+  $proc_props{exe}  = get_nr_exe($pid);
+  $proc_props{unit} = get_unitname($pid, $proc_props{exe});
+  return \%proc_props;
+}
+
+sub get_username {
+  my $uid = shift;
+  return getpwuid($uid) || undef;
+}
+
+sub get_nr_exe {
+  my $pid = shift;
+  my $fn = "/proc/$pid/exe";
+  return '' unless (-e $fn);
+  return readlink($fn);
+}
+
+sub get_unitname {
+  my $pid = shift;
+  my $exe = shift;
+
+  if ($pid == 1
+       && $exe =~ m#^(/usr){0,1}/lib/systemd/systemd#) {
+    return "systemd manager";
+  }
+
+  open my $fh, "<", "/proc/$pid/cgroup"
+      or return '';
+  my $rc = '';
+  while(<$fh>) {
+    chomp;
+    my ($id, $type, $value) = split(/:/, $_, 3);
+    if ($type eq 'name=systemd') {
+      if ($value =~ m#/user-(\d+)\.slice/session-(\d+)\.scope#) {
+        print "[verbose] pid $pid part of user session: "
+              . "uid=$1 session=$2\n" if $verbose;
+        $rc = "session-$2.scope";
+        next;
+      }
+      if ($value =~ m#/user\@(\d+)\.service#) {
+        print "[verbose] pid $pid part of user manager service: "
+              . "uid=$1\n" if $verbose;
+        $rc = "user\@$1.service";
+        next;
+      }
+      if ($value =~ m#([^/]+\.service)$#) {
+        $rc = $1;
+        next;
+      }
+    }
+  }
+  return $rc;
+}
+
+# read file mapping (Linux 2.0+), FYI: needrestart tool
+sub is_maps_match {
+  my $pid    = shift;
+  my $status = 0;
+  open my $fh, '<', "/proc/$pid/maps";
+  unless (defined $fh) {
+    print "[warn] could not open pid $pid maps file: $!\n" if $verbose;
+    return $status;
+  }
+
+  while(<$fh>) {
+    chomp;
+    my ($maddr, $mperm, $moffset, $mdev, $minode, $path) = split(/\s+/, $_, 6);
+
+    # skip special handles and non-executable mappings
+    next if (! defined($path) 
+              || $minode == 0
+              || ($path ne '' && $mperm !~ /x/));
+
+    # remove executable mapped files
+    if ($path =~ s/\s+\(deleted\)$//) {
+      print "[verbose] maps - pid $pid uses non-existing $path\n" if $verbose;
+      $status = 1;
+      last
+    }
+
+    # check for outdate lib mapping
+    $maddr =~ s/^0+(^-)/$1/;
+    $maddr =~ s/-0+(.+)/-$1/;
+    my @pfiles = 
+       ("/proc/$pid/map_files/$maddr",
+        "/proc/$pid/root/$path");
+    my ($testp) = grep { -e $_ } @pfiles; # only one meet the pfiles
+    unless ($testp) {
+	if ($path !~ m@(?:^(/var)?/tmp|(/var)?/run)@){
+        print "[verbose] mapfile - pid $pid uses non-existing $path\n" if $verbose;
+        $status = 1;
+        last;
+      }
+    }
+
+    # get on-disk info
+    my ($sdev, $sinode) = stat($testp); # first two elements.
+    my @sdevs = (
+      # glibc gnu_dev_* definition from sysmacros.h
+      sprintf("%02x:%02x", (($sdev >> 8) & 0xfff) | (($sdev >> 32) & ~0xfff), 
+               (($sdev & 0xff) | (($sdev >> 12) & ~0xff))
+             ),
+
+      # Traditional definition of major(3) and minor(3)
+      sprintf("%02x:%02x", $sdev >> 8, $sdev & 0xff),
+    );
+
+    # Don't compare device numbers on ana filesystems
+    # w/o a backing devic
+    my $major = (($sdev >> 8) & 0xfff) | (($sdev >> 32) & ~0xfff);
+    if ($major == 0 || $major == 144
+        || $major == 145 || $major == 146) {
+      $mdev = "00:00";
+    }
+
+    # compare maps contents vs. on-disk
+    unless ($minode eq $sinode
+             && ((grep {$mdev eq $_} @sdevs) || $mdev =~ /^00:/)) {
+      print "[verbose] on-disk - pid $pid uses obsolete $path\n" if $verbose;
+      $status = 1;
+      last;
+    }
+  }
+
+  return $status;
+}
+
+# only check the pid service
+if ($pid) {
+  if (pid_exists($pid)) {
+    my $proc_set = get_proc_status($pid);
+    if (is_maps_match($pid)) {
+      if ($proc_set->{unit}) {
+        print "pid($pid) - ["
+              . $proc_set->{unit}
+              . "] is need restart.\n";
+      }
+    }
+    else {
+      print "pid($pid) - "
+            . "is ok\n";
+    }
+  }
+  else {
+    print "pid($pid) is not exists\n";
+  }
+  exit 0;
+}
+
+# check all service
+opendir(my $dh, "/proc") or die "open /proc error: $!";
+
+my %procs;
+while(my $entry = readdir($dh)) {
+  next unless (is_pid($entry));
+  next if $entry == $$;
+  if (pid_exists($entry)) {
+    my $proc_sets = get_proc_status($entry);
+    if (is_maps_match($entry)) {
+      $procs{$entry} = $proc_sets;
+    }
+  }
+}
+closedir $dh;
+
+if (%procs) {
+  print "The following service should restart as it\n"
+        . "uses deleted or non-existing binary file.\n\n";
+  printf("%6s   %s\n", "pid", "service");
+
+  foreach my $k (sort { $a <=> $b } keys %procs) {
+    printf("%6d - %s\n", $k, $procs{$k}{unit}); 
+  }
+}
+else {
+  print "all services are ok!\n";
+}
+
+=head1 AUTHOR
+
+arstercz@gmail.com
+
+=head1 CHANGELOG
+
+sys-needcheck v0.1.0 version
+
+=cut

@@ -38,6 +38,7 @@ bin/sys-mysql-search
 bin/sys-mysql-set-maxconnections
 bin/sys-mysql-summary
 bin/sys-murmur3
+bin/sys-needrestart
 bin/sys-nginx-subdir
 bin/sys-nton
 bin/sys-numa-maps

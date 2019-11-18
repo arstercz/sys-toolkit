@@ -25,6 +25,7 @@ Table of Contents
 * [sys-php-chroot](#sys-php-chroot)
 * [sys-nginx-subdir](#sys-nginx-subdir)
 * [sys-murmur3](#sys-murmur3)
+* [sys-needrestart](#sys-needrestart)
 * [sys-numa-maps](#sys-numa-maps)
 * [sys-tcp-port-proxy](#sys-tcp-port-proxy)
 * [sys-shell-type](#sys-shell-type)
@@ -1858,6 +1859,44 @@ use `-h` option to read more usage.
 
 
 [Back_to_TOC](#table-of-contents)
+
+sys-needrestart
+===============
+
+`type: perl`
+
+#### Usage:
+
+```
+# wt-needrestart -p 1841
+pid(1841) - [systemd-machined.service] is need restart.
+
+check and report the need restart services, does not support `auto restart` sevice.
+
+**note**: only useful when Linux is running in systemd service. almost of the check method is reference from [needrestart](https://github.com/liske/needrestart).
+
+### Usage
+
+```
+# wt-needrestart -p 1841
+pid(1841) - [systemd-machined.service] is need restart.
+
+# wt-needrestart
+The following service should restart as it
+uses deleted or non-existing binary file.
+
+   pid   service
+   1 - systemd manager
+   526 - systemd-journald.service
+   548 - lvm2-lvmetad.service
+   560 - systemd-udevd.service
+   765 - NetworkManager.service
+   766 - polkit.service
+   772 - irqbalance.service
+   775 - systemd-logind.service
+   1082 - tuned.service
+```
+use `--help` option for more usage message.
 
 License
 =======

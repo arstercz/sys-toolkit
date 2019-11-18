@@ -1562,10 +1562,10 @@ Read the log file from last checkpoint, it's useful when analsis log file with a
 ### Usage
 ```
 $ echo 1 >/tmp/t.log
-$ wt-logtail -f /tmp/t.log 
+$ sys-logtail -f /tmp/t.log 
 1
 $ echo 2 >>/tmp/t.log        
-$ wt-logtail -f /tmp/t.log 
+$ sys-logtail -f /tmp/t.log 
 2
 ```
 use `--help` option for more usage message.
@@ -1703,7 +1703,7 @@ sys-sift
 
 `type: Bash`
 
-Browses files created by wt-stalk.
+Browses files created by sys-stalk.
 
 
 ### Usage
@@ -1872,10 +1872,10 @@ check and report the need restart services, does not support `auto restart` sevi
 ### Usage
 
 ```
-# wt-needrestart -p 1841
+# sys-needrestart -p 1841
 pid(1841) - [systemd-machined.service] is need restart.
 
-# wt-needrestart
+# sys-needrestart
 The following service should restart as it
 uses deleted or non-existing binary file.
 

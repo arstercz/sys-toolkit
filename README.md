@@ -1865,12 +1865,6 @@ sys-needrestart
 
 `type: perl`
 
-#### Usage:
-
-```
-# wt-needrestart -p 1841
-pid(1841) - [systemd-machined.service] is need restart.
-
 check and report the need restart services, does not support `auto restart` sevice.
 
 **note**: only useful when Linux is running in systemd service. almost of the check method is reference from [needrestart](https://github.com/liske/needrestart).

@@ -51,4 +51,5 @@ $ gcc -g -Wall -o sys-mysql-sql-reject -lpcap src/sys-mysql-sql-reject.c
 $ gcc -o sys-tcp-port-proxy src/sys-tcp-port-proxy.c
 $ gcc -o sys-mem-eat src/sys-mem-eat.c
 $ gcc -o sys-unmap-file src/sys-unmap-file.c
+$ gcc -o sys-mapstat-file src/sys-mapstat-file.c
 ```

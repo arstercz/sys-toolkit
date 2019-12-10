@@ -43,6 +43,7 @@ Table of Contents
 * [sys-dns-response-time](#sys-dns-response-time)
 * [sys-kill-close-wait](#sys-kill-close-wait)
 * [sys-unmap-file](#sys-unmap-file)
+* [sys-mapstat-file](#sys-mapstat-file)
 * [sys-mem-eat](#sys-mem-eat)
 * [sys-memory-maps](#sys-memory-maps)
 * [sys-memcached-check](#sys-memcached-check)
@@ -1859,6 +1860,24 @@ use `-h` option to read more usage.
 
 
 [Back_to_TOC](#table-of-contents)
+
+sys-mapstat-file
+================
+
+`type: c`
+
+get cache statistics for a file. read more from [nocache](https://github.com/Feh/nocache).
+
+### Usage
+```
+$ sys-mapstat-file -f MySQL-Linux.x86_64.ssl101.tar.gz 
+page in cache: 16791/16791 (100.0%) [filesize=67161.5K, pagesize=4K]
+```
+
+use `-h` option to read more usage.
+
+[Back_to_TOC](#table-of-contents)
+
 
 sys-needrestart
 ===============

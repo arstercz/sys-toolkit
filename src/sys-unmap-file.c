@@ -84,6 +84,11 @@ int main (int argc, char *argv[])
     exit(1);
   }
 
+  if (!S_ISREG(fd_stat.st_mode)) {
+    fprintf(stderr, "%s is not a regular file", options.file);
+    exit(1);
+  }
+
   if (options.sync) {
     fdatasync(fd);
   }

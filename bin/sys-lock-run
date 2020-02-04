@@ -110,13 +110,14 @@ sys-lock-run - bash script or command can only run once at any time by using flo
   OPTION:
      -f the lock file used, default is `/tmp/(short_md5).lock` of the command line
      -v print version message 
+     -h print help message
   eg:
      1. run command in session A
      $ ./sys-lock-run -f /var/run/lockfile sleep 20
      2. run command in session B
      # ./sys-lock-run -f /var/run/lockfile sleep 20
      2016_03_23_12_44_13 [warn] Only once can run at one time - sleep
-  note: as use flock, this tool will create lock file in /tmp dirs and delete lock file when exit.
+  note: as use flock, this tool will create and delete lock file when exit.
 
 =head1 AUTHOR
 

@@ -482,11 +482,11 @@ bash script or command can only run once at any time by using flock
 
 ```
 1. run command in session A
-$ ./sys-lock-run sleep 20
+$ ./sys-lock-run -f /var/run/lockrun sleep 20
 
 2. run command in session B
-# ./sys-lock-run sleep 20
-2016_03_23_12_44_13 [warn] Only once can run at one time - sleep
+# ./sys-lock-run -f /var/run/lockrun sleep 20
+2016_03_23_12_44_13 [warn] Only once can run at one time - sleep 20
 ```
 
 note: as use flock, this tool will create lock file in /tmp dirs and 

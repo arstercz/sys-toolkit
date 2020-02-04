@@ -44,17 +44,30 @@ exec_lock() {
    }
 }
 
+shortmd5_cmd() {
+  md5cmd=$(which md5sum)
+  [ -x $md5cmd ] && {
+    $md5cmd <<<"$@" | cut -c 1-10 
+  }
+}
+
 # Run the program
 main() {
+   for o; do
+     case "${o}" in
+       -f)        shift; OPT_LOCKFILE="$1"; shift; ;;
+       -h)        perl -00 -ne 'm/^\s+Usage:/ && print' "$0"; exit 0 ;;
+       -v)        grep -A2 '^=head1 VERSION' "$0" | tail -n1; exit 0 ;;
+       -*)        echo "Unknown option ${o}. Try -h."; exit 1; ;;
+     esac
+   done
+
    if [ $# -eq 0 ]; then
-       echo "Usage: sys-lock-run command/script ..."
+       echo "Usage: sys-lock-run -f lockfile command/script ..."
        exit 2;
    fi
 
-   readonly OPT_COMMAND=$1
-   if ! $(exist_check $OPT_COMMAND); then
-       warn "can not find $OPT_COMMAND"
-   fi
+   readonly CMD_SHORT=$(shortmd5_cmd $@)
 
    flockcmd=$(which flock)
    if [ ! -x $flockcmd ]; then
@@ -64,10 +77,10 @@ main() {
 
    LOCK_DIR="/tmp"
    LOCK_FD=200
-   LOCK_FILE="$LOCK_DIR/$(lockfile $OPT_COMMAND)"
+   LOCK_FILE="${OPT_LOCKFILE:-"$LOCK_DIR/$(lockfile $CMD_SHORT)"}"
 
    exec_lock $LOCK_FD $LOCK_FILE $flockcmd || {
-       warn "Only once can run at one time - $OPT_COMMAND"
+       warn "Only once can run at one time - $@"
    }
 
    "$@"
@@ -93,16 +106,16 @@ sys-lock-run - bash script or command can only run once at any time by using flo
 
 =head1 SYNOPSIS
 
-  Usage: sys-lock-run [command]
-  
+  Usage: sys-lock-run [OPTIONS] [command]
+  OPTION:
+     -f the lock file used, default is `/tmp/(short_md5).lock` of the command line
+     -v print version message 
   eg:
      1. run command in session A
-     $ ./sys-lock-run sleep 20
-
+     $ ./sys-lock-run -f /var/run/lockfile sleep 20
      2. run command in session B
-     # ./sys-lock-run sleep 20
+     # ./sys-lock-run -f /var/run/lockfile sleep 20
      2016_03_23_12_44_13 [warn] Only once can run at one time - sleep
-
   note: as use flock, this tool will create lock file in /tmp dirs and delete lock file when exit.
 
 =head1 AUTHOR

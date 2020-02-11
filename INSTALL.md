@@ -32,6 +32,7 @@ some c tools need the following libraries:
 
 ```
 libpcap
+libpcap-devel
 ```
 
 ### install perl and shell tool

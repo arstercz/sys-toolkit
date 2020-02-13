@@ -615,7 +615,13 @@ sub is_read_only($) {
 
 sub has_gtid($) {
     my $self  = shift;
-    my $value = $self->get_variable(Has_Gtid_SQL);
+    my $value;
+    eval {
+      $value = $self->get_variable(Has_Gtid_SQL);
+    };
+    if ($@) {
+      return 'Not Support';
+    }
     if ( defined($value) && $value eq "ON" ) {
         $self->{has_gtid} = 1;
         return 1;
@@ -812,14 +818,7 @@ sub get_common_info($) {
     $common_hash{version}   = $self->get_version();
     $common_hash{read_only} = $self->is_read_only();
     $common_hash{databases} = $self->get_database_list();
-    $common_hash{has_gtid}  = do {
-        if ( $common_hash{version} =~ m/5.6/ ) {
-            $self->has_gtid();
-        }
-        else {
-            "Not Support";
-        }
-    };
+    $common_hash{has_gtid}  = $self->has_gtid();
     $common_hash{binlog_format} = $self->show_variable("binlog_format");
     $common_hash{binlog_enable} = $self->is_binlog_enabled();
     $common_hash{tx_isolation}  = $self->show_variable("tx_isolation");

@@ -109,7 +109,7 @@ log_output() {
     open my $fh, "<", $ENV{LOGFILE} 
       or die "open file error: $!";
 
-    seek($fh, $ENV{POSOLD}, 0);
+    sysseek($fh, $ENV{POSOLD}, 0);
     my $content;
     sysread $fh, $content, $ENV{DIFFSIZE};
     print $content;

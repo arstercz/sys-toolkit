@@ -119,22 +119,21 @@ sub write_string {
       next unless defined $list->{$k}->{$t};
       my $ip = $list->{$k}->{$t}->[0]->{ip};
       my $on = $list->{$k}->{$t}->[0]->{on};
-      $dentries{$ip} = [] unless exists $dentries{$ip};
-      push @{$dentries{$ip}}, {dentry => $k, on => $on};
+      my $key= "$ip $k";
+      $dentries{$key} = [] unless exists $dentries{$key};
+      push @{$dentries{$key}}, {on => $on};
     }
   }
 
   my $content = "";
   foreach my $d (sort {$a cmp $b} keys %dentries) {
     my $comment = "";
-    my $hosts = "";
     foreach my $k (@{$dentries{$d}}) {
       if ($k->{on} == 0) {
         $comment = "# ";
       }
-      $hosts .= $k->{dentry}. " ";
     }
-    $content .= "$comment" . $d . " $hosts\n" if length($hosts);
+    $content .= "$comment" . $d . "\n";
   }
   return $content;
 }

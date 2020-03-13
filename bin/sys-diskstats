@@ -25,11 +25,13 @@ use Data::Dumper;
 
 my $device;
 my $interval = 1;
+my $number = 100;
 my $help;
 
 GetOptions(
     "d=s" => \$device,
     "i=i" => \$interval,
+    "n=i" => \$number,
     "h!"  => \$help,
 );
 
@@ -88,6 +90,7 @@ sub round_value {
 }
 
 sub print_state {
+    local $| = 1;
     my ($time, $disk_info) = @_;
     printf("%12s %10.2f%10.2f%10.2f%10.2f%13.2f%10.2f%13.2f%11.2f ms%11.2f ms%11.2f ms%11.2f ms\n", $time,
     $disk_info->{iops}, $disk_info->{rs}, $disk_info->{rs_mer}, $disk_info->{ws},
@@ -97,16 +100,17 @@ sub print_state {
 
 # print header info
 sub print_header {
-    printf("%-12s %10s%10s%10s%10s%10s%10s%10s%15s%13s%13s%13s\n",
+    local $| = 1;
+    printf("\n%-12s %10s%10s%10s%10s%10s%10s%10s%15s%13s%13s%13s\n",
         " " x 12, " " x 6 . 'iops', " " x 8 . 'rs', " " x 4 . 'rs_mer', " " x 8 . 'ws', 
         " " x 7 . 'ws_mer', " " x 4 . 'rs_kB', " " x 7 . 'ws_kB', " " x 3 . 'e_iot', 
         " " x 3 . 'e_iot_w', " " x 4 . 'r_t', " " x 4 . 'w_t');
 }
 
 # read /proc/diskstats
-my $n = 100;
-while( $n-- ) {
-    print_header() if ($n % 10 == 9);
+my $n = 0;
+while( $n < $number ) {
+    print_header() if ($n % 10 == 0);
 
     open my $fh, '<', '/proc/diskstats' or die "open /proc/diskstats error: $!";
     my $find = 0;
@@ -170,8 +174,9 @@ while( $n-- ) {
           $disk_per{'e_iot'}   = round_value( $disk_value{'e_iot'} / $interval );
           $disk_per{'e_iot_w'} = round_value( $disk_value{'e_iot_w'} / $interval );
           
-          print_state( get_time(), \%disk_per ) if $n < 99;
+          print_state( get_time(), \%disk_per ) if $n < $number;
           $find = 1;
+	  $n++;
       }
     }
     sleep $interval;

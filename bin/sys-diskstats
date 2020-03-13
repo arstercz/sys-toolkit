@@ -12,7 +12,8 @@ sys-diskstats - see the local device disk status
     options:
        d : device, eg: sda1, sdb ..
        i : interval calculate the result.
-       h :print help info.
+       n : loop number to collect stat, default is 100.
+       h : print help info.
 
 =cut
 

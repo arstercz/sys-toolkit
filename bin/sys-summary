@@ -1225,7 +1225,7 @@ raid_controller () { local PTFUNCNAME=raid_controller;
 
 find_raid_controller_dmesg () { local PTFUNCNAME=find_raid_controller_dmesg;
    local file="$1"
-   local pat='scsi[0-9].*: .*'
+   local pat='scsi.*: .*'
    if grep -qi "${pat}megaraid" "${file}"; then
       echo 'LSI Logic MegaRAID SAS'
    elif grep -q "Fusion MPT SAS" "${file}"; then

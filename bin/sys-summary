@@ -1859,6 +1859,7 @@ parse_lsi_megaraid_adapter_info () { local PTFUNCNAME=parse_lsi_megaraid_adapter
    [ -e "$file" ] || return
 
    local name="$(awk -F: '/Product Name/{print substr($2, 2)}' "${file}")";
+   local fver="$(awk -F: '/FW Package Build/{print substr($2, 2)}' "${file}")"
    local int=$(awk '/Host Interface/{print $4}' "${file}");
    local prt=$(awk '/Number of Backend Port/{print $5}' "${file}");
    local bbu=$(awk '/^BBU             :/{print $3}' "${file}");
@@ -1869,7 +1870,7 @@ parse_lsi_megaraid_adapter_info () { local PTFUNCNAME=parse_lsi_megaraid_adapter
    local crd=$(awk '/Critical Disks/{print $4}' "${file}");
    local fad=$(awk '/Failed Disks/{print $4}' "${file}");
 
-   name_val "Model" "${name}, ${int} interface, ${prt} ports"
+   name_val "Model" "${name} - ${fver}, ${int} interface, ${prt} ports"
    name_val "Cache" "${mem} Memory, BBU ${bbu}"
 }
 
@@ -1919,10 +1920,10 @@ parse_lsi_megaraid_devices () { local PTFUNCNAME=parse_lsi_megaraid_devices;
    [ -e "$file" ] || return
 
    echo
-   echo "  PhysiclDev Type State   Errors Vendor  Model        Size"
-   echo "  ========== ==== ======= ====== ======= ============ ==========="
+   echo "  PhysiclDev Type State   Errors Vendor  Model        Revision     Size"
+   echo "  ========== ==== ======= ====== ======= ============ ============ ==========="
    for dev in $(awk '/Device Id/{print $3}' "${file}" | sort -u); do
-      sed -e '/./{H;$!d;}' -e "x;/Device Id: ${dev}/!d;" "${file}" \
+      sed -e '/^[[:space:]]*$/d' -e '/./{H;$!d;}' -e "x;/Device Id: ${dev}/!d;" "${file}" \
       | awk '
          /Media Type/                        {d=substr($0, index($0, ":") + 2)}
          /PD Type/                           {t=$3}
@@ -1930,11 +1931,11 @@ parse_lsi_megaraid_devices () { local PTFUNCNAME=parse_lsi_megaraid_devices;
          /Media Error Count/                 {me=$4}
          /Other Error Count/                 {oe=$4}
          /Predictive Failure Count/          {pe=$4}
-         /Inquiry Data/                      {v=$3; m=$4;}
+         /Inquiry Data/                      {v=$3; m=$4; n=$5}
          /Raw Size/                          {z=$3}
          END {
-            printf("  %-10s %-4s %-7s %6s %-7s %-12s %-7s\n",
-               substr(d, 1, 10), t, s, me "/" oe "/" pe, v, m, z);
+            printf("  %-10s %-4s %-7s %6s %-7s %-12s %-12s %-7s\n",
+               substr(d, 1, 10), t, s, me "/" oe "/" pe, v, m, n, z);
          }'
    done
 }

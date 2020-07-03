@@ -119,7 +119,7 @@ my $sql_block_info =<<"SQL_END";
 SELECT id, user, host, db, IFNULL(state, 'NULL'), time, IFNULL(info, 'NULL')
 FROM information_schema.processlist
 WHERE DB is NOT NULL
-      AND COMMAND NOT IN ('Binlog Dump', 'Connect', 'Sleep')
+      AND COMMAND NOT IN ('Binlog Dump', 'Connect', 'Sleep', 'Killed')
       AND USER <> 'root'
       AND Time > ?
 SQL_END

@@ -65,6 +65,8 @@ is_all="${is_all:-0}"
 
 if [[ $is_kill -ne 1 ]]; then
   is_start=1
+else
+  is_start=0
 fi
 
 export CONFIGQ=$conf

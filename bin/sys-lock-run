@@ -18,9 +18,14 @@ lockfile() {
    echo "$1.lock-run" | tr '/' '_'
 }
 
-# check command or script exist
-exist_check() {
-   [ "/usr/bin/which $1 2>/dev/null" ] || [ "/bin/ls $1" = $1 ]
+_which() {
+  if [ -x /usr/bin/which ]; then 
+    /usr/bin/which "$1" 2>/dev/null | awk '{print $1}'
+  elif which which 1>/dev/null 2>&1; then 
+    which "$1" 2>/dev/null | awk '{print $1}'
+  else 
+    echo "$1"
+  fi   
 }
 
 is_sourced() {
@@ -28,16 +33,15 @@ is_sourced() {
 }
 
 exec_lock() {
-   local fd=$1
-   fd="${fd:-2}"
-   local lock_file=$2
-   flockcmd=$3
+   local lock_file=$1
+   local fd=99
+
 
    # create lock file
    eval "exec $fd>$lock_file"
 
    # acquier lock, timeout when execute then 1 second
-   $flockcmd -w 1 -x -n $fd && {
+   flock -w 1 -x -n $fd && {
       return 0
    } || {
       return 1
@@ -49,6 +53,11 @@ shortmd5_cmd() {
   [ -x $md5cmd ] && {
     $md5cmd <<<"$@" | cut -c 1-10 
   }
+}
+
+onexit() {
+  local lock_file=$1
+  [ -e "$lock_file" ] && unlink $1
 }
 
 # Run the program
@@ -76,18 +85,16 @@ main() {
    fi
 
    LOCK_DIR="/tmp"
-   LOCK_FD=200
    LOCK_FILE="${OPT_LOCKFILE:-"$LOCK_DIR/$(lockfile $CMD_SHORT)"}"
 
-   exec_lock $LOCK_FD $LOCK_FILE $flockcmd || {
+   exec_lock $LOCK_FILE || {
        warn "Only once can run at one time - $@"
    }
 
-   "$@"
+   # clean lock file before exit
+   trap 'onexit $LOCK_FILE' INT TERM EXIT
 
-   if [ -e $LOCK_FILE ]; then
-       unlink $LOCK_FILE
-   fi
+   "$@"
 }
 
 if is_sourced; then

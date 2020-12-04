@@ -570,14 +570,22 @@ _pidof() {
    fi
 }
 
+_userofpid() {
+   local pid="$1"
+   ps -o user= -p $pid
+}
+
+_pidofpattern() {
+   local pattern="$1"
+   pgrep -f "$pattern" 2>/dev/null
+}
+
 _lsof() {
    local pid="$1"
    if ! lsof -p $pid 2>/dev/null; then
       /bin/ls -l /proc/$pid/fd 2>/dev/null
    fi
 }
-
-
 
 _which() {
    if [ -x /usr/bin/which ]; then
@@ -737,6 +745,7 @@ CMD_PERF="${CMD_PERF:-"$(_which perf)"}"
 CMD_HTTPSTAT="${CMD_HTTPSTAT:-"$(_which sys-httpstat)"}"
 CMD_TCPRSTAT="${CMD_TCPRSTAT:-"$(_which tcprstat-static)"}"
 CMD_CHECKPORT="${CMD_CHECKPORT:-"$(_which sys-checkport)"}"
+CMD_JSTACK="${CMD_JSTACK:-"$(_which jstack)"}"
 CMD_DMIDECODE="${CMD_DMIDECODE:-"$(_which dmidecode)"}"
 CMD_GETCONF="${CMD_GETCONF:-"$(_which getconf)"}"
 CMD_AUDITCTL="${CMD_AUDITCTL:-"$(_which auditctl)"}"
@@ -751,7 +760,11 @@ collect() {
    local process_pid=""
    local process_port=""
    if [ "$OPT_PROGRAM_NAME" ]; then
-      process_pid=$(_pidof "$OPT_PROGRAM_NAME" | awk '{print $1; exit;}')
+      if [ "$OPT_COLLECT_JSTACK" -a "$CMD_JSTACK" ]; then
+         process_pid=$(_pidofpattern "$OPT_PROGRAM_NAME")
+      else
+         process_pid=$(_pidof "$OPT_PROGRAM_NAME" | awk '{print $1; exit;}')
+      fi
    fi
 
    if [ "$OPT_PROGRAM_PID" ]; then
@@ -899,7 +912,7 @@ collect() {
    else
       $CMD_PERF record -F 99 -a -g -o "$d/$p-perf" \
                 sleep $PERF_TIME &
-      perf_pid=$1
+      perf_pid=$!
    fi
 
    if [ "$CMD_TCPRSTAT" -a "$process_port" -a "$CMD_CHECKPORT" ]; then
@@ -908,6 +921,13 @@ collect() {
         $CMD_TCPRSTAT -p $process_port -t $OPT_SLEEP_COLLECT \
            -n $cnt >> "$d/$p-tcprstat" & 
       fi
+   fi
+
+   local jstack_pid=""
+   if [ "$CMD_JSTACK" -a "$OPT_COLLECT_JSTACK" -a "$process_pid" ]; then
+      run_user=$(_userofpid $process_pid)
+      sudo -u$run_user $CMD_JSTACK -l $process_pid >> "$d/$p-jstack" &
+      jstack_pid=$!
    fi
 
 
@@ -993,6 +1013,7 @@ collect() {
 
    [ "$tcpdump_pid" ]        && kill $tcpdump_pid
    [ "$perf_pid" ]           && kill $perf_pid
+   [ "$jstack_pid" ]         && kill $jstack_pid
 
    hostname > "$d/$p-hostname"
 
@@ -1571,6 +1592,12 @@ report memory map of the program.
 Collect perf data. This is achieved by perf record at 99 frequency, and it will
 record whole system profile. it running in OPT_RUN_TIME by default.
 
+=item --collect-jstack
+
+Collect the stack of the java process. This option need the program-pid or
+program-name is java process. the program-name can be pattern when collect-jstack
+is set, this option maybe slow down the java process if process is very busy.
+
 =item --config
 
 type: string
@@ -1934,6 +1961,8 @@ Specifically, the variables that can be set are:
 =item CMD_PERF
 
 =item CMD_HTTPSTAT
+
+=item CMD_JSTACK
 
 =item CMD_DMIDECODE
 

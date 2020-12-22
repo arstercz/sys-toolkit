@@ -63,6 +63,7 @@ Table of Contents
 * [sys-mysql-diff](#sys-mysql-diff)
 * [sys-mysql-error](#sys-mysql-error)
 * [sys-mysql-search](#sys-mysql-search)
+* [sys-wechat-ops](#sys-wechat-ops)
 * [License](#License)
 
 sys-genpass
@@ -1909,6 +1910,46 @@ uses deleted or non-existing binary file.
    775 - systemd-logind.service
    1082 - tuned.service
 ```
+use `--help` option for more usage message.
+
+sys-wechat-ops
+==============
+
+`type: perl`
+
+send message, file, image to your wechat.
+
+**note**: `sys-wechat-ops` will read file content and send when type is text.
+
+### install dependency
+
+```
+for redhat/centos:
+   yum install perl-Config-Tiny perl-JSON perl-libwww-perl perl-HTTP-Message
+   
+for debian/ubuntu:
+   apt install libconfig-tiny-perl libjson-perl libhttp-message-perl
+```
+
+### Set your wechat config, such as:
+```
+# cat /etc/wechat.conf
+agentid = ...wechat-agentid....
+secret  = ...wechat-secret.....
+corpid  = ...wechat-corpid.....
+touser  = userA|userB...
+# toparty = 5|6
+# totag   = ...
+
+```
+
+### Usage
+```
+sys-wechat-ops --conf /etc/wechat.conf --type text  --attach name.log
+sys-wechat-ops --conf /etc/wechat.conf --type file  --attach name.xlsx
+sys-wechat-ops --conf /etc/wechat.conf --type image --attach name.png
+```
+
 use `--help` option for more usage message.
 
 License

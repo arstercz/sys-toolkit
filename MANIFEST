@@ -53,8 +53,10 @@ bin/sys-stalk
 bin/sys-summary
 bin/sys-swap
 bin/sys-traffic-capture
+bin/sys-wechat-ops
 src/sys-mem-eat.c
 src/sys-mysql-sql-reject.c
 src/sys-tcp-port-proxy.c
 src/sys-unmap-file.c
 src/sys-mapstat-file.c
+

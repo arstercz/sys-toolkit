@@ -19,6 +19,10 @@ Term::ReadKey
 Net::DNS
 Digest::HMAC
 IO::Socket::Timeout
+Config::Tiny
+LWP::UserAgent
+HTTP::Request::Common
+JSON
 ```
 
 some shell tools need the following commands:

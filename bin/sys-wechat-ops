@@ -1,0 +1,400 @@
+#!/usr/bin/env perl
+=pod
+
+=head1 NAME
+
+sys-wechat-ops - send message, file, image to wechat.
+
+=head1 SYNIPSIS
+
+Usage: sys-wechat-ops [OPTION...]
+
+=head1 RISKS
+
+  read more from https://work.weixin.qq.com/api/doc/90001/90143/90372
+
+  Dependency:
+   for redhat/centos:
+      yum install perl-Config-Tiny perl-JSON perl-libwww-perl perl-HTTP-Message
+	  
+   for debian/ubuntu:
+      apt install libconfig-tiny-perl libjson-perl libhttp-message-perl
+  
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long;
+use Data::Dumper;
+use Config::Tiny;
+use Carp;
+use HTTP::Request::Common;
+use LWP::UserAgent;
+use JSON;
+use utf8;
+
+my $conf="/etc/wechat.conf";
+my $debug = 0;
+my $type  = 'text'; # only support for text, file, image
+my $attach;
+my $help;
+
+$| = 1;
+GetOptions (
+  'conf=s'     => \$conf,
+  'debug!'     => \$debug,
+  'type=s'     => \$type,
+  'attach=s'   => \$attach,
+  'help!'      => \$help,
+);
+
+if ($help) {
+  system("perldoc -T $0");
+  exit 0;
+}
+
+unless (grep($type, qw(text image file))) {
+  print "unkonwn type: $type!\n";
+  exit 1;
+}
+
+sub get_token {
+  my ($ua, $corpid, $secret) = @_;
+  my $url = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?"
+          . "corpid=$corpid"
+          . "&corpsecret=$secret";
+
+  my $res = $ua->get($url);
+  unless ($res->is_success) {
+    return;
+  }
+
+  my $decode = $res->decoded_content;
+  $decode =~ s/(?:^\[|\]$)//g;
+
+   my $text = decode_json($decode);
+   return unless $text->{errcode} == 0;
+
+   return $text->{access_token};
+}
+
+sub gen_token_file {
+  my ($corpid, $agentid) = @_;
+  return "/tmp/wechat-$corpid-$agentid.token";
+}
+
+sub is_file_time_ok {
+  my $file = shift;
+
+  return 0 unless -e $file;
+
+  my @stat = stat "$file";
+
+  if (time - $stat[-4] >= 3600) {
+    return 0;
+  }
+
+  return 1;
+}
+
+sub get_cache_token {
+  my ($corpid, $agentid) = @_;
+  my $file = gen_token_file($corpid, $agentid);
+
+  unless (is_file_time_ok($file)) {
+    return undef;
+  }
+
+  open my $fh, '<', $file 
+     or return undef;
+
+  my $token;
+  while(<$fh>) {
+    chomp;
+    $token = $_;
+    last if defined $token;
+  }
+
+  return $token;
+}
+
+sub set_cache_token {
+  my ($corpid, $agentid, $token) = @_;
+  my $file = gen_token_file($corpid, $agentid);
+
+  open my $fh, '>', $file
+     or die "open $file error: $!";
+
+  eval {
+    print $fh "$token";
+  };
+  if ($@) {
+    print "+- set token error: $@";
+    return 0;
+  }
+
+  return 1;
+}
+
+sub wechat_send {
+  my ($ua, $token, $json_str) = @_;
+
+  my $url = "https://qyapi.weixin.qq.com/cgi-bin/message/send?"
+          . "access_token=$token";
+
+  my $request = 
+    HTTP::Request::Common::POST(
+      $url,
+      'User-Agent' => 'udbm_v0.1',
+      'Content-Type' => 'application/json; charset=utf-8',
+      'Content' => $json_str,
+    );
+
+  my $res = $ua->request($request);
+  unless ($res->is_success) {
+    return 0;
+  }
+
+  my $decode = $res->decoded_content;
+  $decode =~ s/(?:^\[|\]$)//g;
+
+  my $text = decode_json($decode);
+  unless ($text->{errcode} == 0) {
+    print "+- decode error: $text->{errmsg}\n";
+    return 0;
+  }
+  return 1;
+}
+
+sub send_msg {
+  my ($ua, $token, $msg, $attr) = @_;
+
+  $attr->{msgtype} = 'text';
+  $attr->{text}    = { content => "$msg" };
+  my $json_str = encode_json($attr);
+  my $str = to_json(
+               from_json($json_str,
+                 { utf8  => 1 }
+               ), 
+               { pretty => 1}
+             );
+
+  return wechat_send($ua, $token, $str);
+}
+
+sub send_image {
+  my ($ua, $token, $media_id, $attr) = @_;
+
+  $attr->{msgtype} = 'image';
+  $attr->{image}   = { media_id => "$media_id" };
+  my $json_str = encode_json($attr);
+
+  return wechat_send($ua, $token, $json_str);
+}
+
+sub send_file {
+  my ($ua, $token, $media_id, $attr) = @_;
+
+  $attr->{msgtype} = 'file';
+  $attr->{file}    = { media_id => "$media_id" };
+  my $json_str = encode_json($attr);
+
+  return wechat_send($ua, $token, $json_str);
+}
+
+sub upload_attach {
+  my ($ua, $file, $token, $type) = @_;
+
+  unless (-e $file) {
+    print "+- file is not exists!\n";
+    return;
+  }
+
+  my $url = "https://qyapi.weixin.qq.com/cgi-bin/media/upload?"
+          . "access_token=$token&type=$type";
+
+  my @status = stat($file);
+  my $request =
+    HTTP::Request::Common::POST(
+      $url,
+      'User-Agent'   => 'udbm_v0.1',
+      'Content_Type' => 'multipart/form-data; charset=utf-8',
+      'boundary'     => '-=-=-=-=9pd9Fi5czEs5ZygEOpIW-=-=-=-=',
+      'Content'      => [
+                          'filename'   => [$file],
+                          'filelength' => $status[7],
+                        ],
+    );
+
+  my $res = $ua->request($request);
+  unless ($res->is_success) {
+    print "+- request error!\n";
+    return;
+  }
+
+  my $decode = $res->decoded_content;
+  $decode =~ s/(?:^\[|\]$)//g;
+
+  my $text = decode_json($decode);
+
+  if ($text->{errcode} == 0) {
+    # such as:
+    # "media_id": "1G6nrLmr5EC3MMb_-zK1dDdzmd0p7cNliYu9V5w7o8K0",
+    return $text->{media_id};
+  }
+  else {
+    print "+- upload error\n";
+    return;
+  }
+}
+
+sub upload_image {
+  my ($ua, $image, $token) = @_;
+
+  unless (-e $image) {
+    print "+- file is not exists\n";
+    return;
+  }
+
+  my $url = "https://qyapi.weixin.qq.com/cgi-bin/media/uploadimg?"
+          . "access_token=$token";
+
+  my $request =
+    HTTP::Request::Common::POST(
+      $url,
+      'User-Agent'   => 'udbm_v0.1',
+      'Content_Type' => 'multipart/form-data; charset=utf-8',
+      'boundary'     => '========9pd9Fi5czEs5ZygEOpIW========',
+      'Content'      => [
+                          'filename'   => [$image],
+                        ],
+    );
+
+  my $res = $ua->request($request);
+  unless ($res->is_success) {
+    print "+- request error\n";
+    return;
+  }
+
+  my $decode = $res->decoded_content;
+  $decode =~ s/(?:^\[|\]$)//g;
+
+
+  my $text = decode_json($decode);
+
+  if ($text->{errcode} == 0) {
+    # should be return url item, such as
+    # "url":"https://wework.qpic.cn/wwpic/505716_eEfpHTvKRF2wX6t_1608195923/0"
+    return $text->{url};
+  }
+  else {
+    print "+- upload error!\n";
+    return;
+  }
+}
+
+my $cfg = Config::Tiny->read("$conf")
+           or die "parse $conf error: $!";
+
+my $ua = LWP::UserAgent->new;
+$ua->timeout(5);
+
+my $token = 
+  get_cache_token( 
+     $cfg->{wechat}->{corpid},
+     $cfg->{wechat}->{agentid}
+  );
+
+unless (defined $token) {
+  $token = get_token($ua, 
+              $cfg->{wechat}->{corpid}, 
+              $cfg->{wechat}->{secret}
+           );
+  if (defined $token) {
+    set_cache_token(
+      $cfg->{wechat}->{corpid},
+      $cfg->{wechat}->{agentid},
+      $token
+    );
+  }
+  else {
+    print "[error] cann't get access_token!";
+    exit 1;
+  }
+}
+
+my %send_handle = (
+  'text' => sub {
+              my ($ua, $token, $attr, $type) = @_;
+              my $msg = '';
+              open my $fh, '<', $attach or die "open $attach error: $!";
+              while(<$fh>) {
+                $msg .= $_;
+              }
+              return send_msg($ua, $token, $msg, $attr);
+            },
+  'file' => sub {
+              my ($ua, $token, $attr, $type) = @_;
+              my $mediaid = upload_attach($ua, $attach, $token, $type);
+              unless (defined $mediaid) {
+                print "get mediaid error for $attach!\n";
+              }
+              return send_file($ua, $token, $mediaid, $attr);
+            },
+  'image'=> sub {
+              my ($ua, $token, $attr) = @_;
+              my $mediaid = upload_attach($ua, $attach, $token, $type);
+              unless (defined $mediaid) {
+                print "get mediaid error for $attach!\n";
+              }
+              return send_image($ua, $token, $mediaid, $attr);
+            },
+);
+
+if ($send_handle{$type}->($ua, $token, $cfg->{wechat}, $type)) {
+  print "+- send ok for $type - $attach!\n";
+}
+else {
+  print "+- send error for $type - $attach!\n";
+}
+
+
+# ##########################################################
+# Documentation
+# ##########################################################
+
+=head1 SYNOPSIS
+
+  options:
+    conf:     config file;
+    debug:    print more verbose message;
+    type:     wechat type message, only support: text, file, image;
+    attach:   attachment file, send file content if type is text;
+    help:     get help message;
+
+  samples:
+    # sys-wechat-ops --conf /etc/wechat.conf --type text  --attach name.log
+    # sys-wechat-ops --conf /etc/wechat.conf --type file  --attach name.xlsx
+    # sys-wechat-ops --conf /etc/wechat.conf --type image --attach name.png
+
+    note: sys-wechat-ops will read file content and send when type is text.
+
+  samples wechat config:
+
+  # cat /etc/wechat.conf
+  [wechat]
+  agentid = ...wechat-agentid....
+  secret  = ...wechat-secret.....
+  corpid  = ...wechat-corpid.....
+  touser  = userA|userB...
+  # toparty = 5|6
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1 version
+
+=cut

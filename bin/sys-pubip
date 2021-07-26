@@ -15,14 +15,13 @@ if [ ! -x $curlcmd ]; then
    exit 1
 fi
 
-urls="ipinfo.io/ip ipecho.net/plain"
+urls="checkip.amazonaws.com ipinfo.io/ip ipecho.net/plain"
 
 echo "Get public ip address:"
 OUTPUT=0
 
-timeoutcmd=$(which timeout)
 for url in $urls; do
-   OUTPUT=$($timeoutcmd 5 $curlcmd -s $url)
+   OUTPUT=$($curlcmd --connect-timeout 5 -s $url)
    echo $OUTPUT | grep -P '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}' >/dev/null
    if [ $? -eq 0 ]; then
       echo $OUTPUT

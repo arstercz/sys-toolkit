@@ -40,6 +40,7 @@ Table of Contents
 * [sys-http-stat](#sys-http-stat)
 * [sys-qtunnel-manage](#sys-qtunnel-manage)
 * [sys-redis-rdb-backup](#sys-redis-rdb-backup)
+* [sys-rmcolor](#sys-rmcolor)
 * [sys-dns-response-time](#sys-dns-response-time)
 * [sys-kill-close-wait](#sys-kill-close-wait)
 * [sys-unmap-file](#sys-unmap-file)
@@ -1339,6 +1340,25 @@ redis32.rdb
 sent 30 bytes  received 467 bytes  994.00 bytes/sec
 total size is 389  speedup is 0.78
 2017_06_27_14_59_52 [info] 10.0.21.5:6380 backup to /srv/redis_backup/10.0.21.5-6380-20170627145949.rdb ok
+```
+
+use help option to read more.
+
+[Back to TOC](#table-of-contents)
+
+sys-rmcolor
+==========
+
+`type: perl`
+
+remove color and control code from text file.
+
+### Usage
+```
+# read from STDIN and print to STDOUT if --file is not set
+$ cat color-file | sys-rmcolor
+
+$ sys-rmcolor -f color-file -d rmcolor-file
 ```
 
 use help option to read more.

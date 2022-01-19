@@ -47,6 +47,7 @@ bin/sys-pubip
 bin/sys-qtunnel-manage
 bin/sys-redis-rdb-backup
 bin/sys-repeat
+bin/sys-rmcolor
 bin/sys-shell-type
 bin/sys-sift
 bin/sys-stalk

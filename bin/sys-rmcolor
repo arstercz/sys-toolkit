@@ -1,0 +1,134 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-rmcolor - remove color and control code from text file
+
+=cut
+
+=head1 SYNOPSIS
+
+    use sys-rmcolor --help for more info.
+
+    $ cat color-file | sys-rmcolor
+    or 
+    $ sys-rmcolor -f color-file -d rmcolor-file
+
+    options:
+       file|f: source color file.
+       dest|d: dest file, default is <file>-rmcolor
+       help|h: print help info.
+
+=cut
+
+use strict;
+use warnings;
+use utf8;
+use Getopt::Long;
+
+my $file;
+my $dest;
+my $help;
+
+GetOptions(
+  "file|f=s"  => \$file,
+  "dest|d=s"  => \$dest,
+  "help|h!"   => \$help,
+);
+
+if($help) {
+  usage($0);
+}
+
+sub usage {
+  my $name = shift;
+  system("perldoc $name");
+  exit 0;
+}
+
+# fork from 
+#    https://github.com/ewaters/ttyrec-plusplus/blob/master/lib/ParseANSISequences.pm
+# http://www.xfree86.org/current/ctlseqs.html
+
+my %simple_sequences = (
+  '=' => 'application_keypad',
+  '>' => 'normal_keypad',
+  '7' => 'save_cursor',
+  '8' => 'restore_cursor',
+);
+
+my $bell = chr(7);
+
+my $fh;
+my $oh;
+if (defined $file) {
+  open $fh, '<', $file or die "open $file error: $!";
+
+  $dest ||= "$file-rmcolor"; 
+  open $oh, '>', $dest or die "open $dest error: $!";
+}
+else {
+  $fh = *STDIN;
+  $oh = *STDOUT;
+}
+
+while (<$fh>) {
+  my $line = $_;
+
+  # ignore sz/rz lines
+  next if $line =~ /rz waiting/;
+  next if $line =~ /sz waiting/;
+  next if $line =~ /B000000000/;
+  next if $line =~ /B080000000/;
+
+  while (length $line) {
+    my $char = substr $line, 0, 1, '';
+    my $ord = ord($char);
+    if ($ord == 27) {
+      my $next_char = substr $line, 0, 1;
+      if ($next_char eq '[') {
+        # Look for CSI
+        if (my ($private, $count, $code) = $line =~ m{^\[ (\?)? (\d* (?:; \d+)*)  ([A-Za-z])}x) {
+          $line =~ s{^.+?$code}{};
+        }
+      }
+      elsif ($simple_sequences{$next_char}) {
+        substr $line, 0, 1, '';
+      }
+      elsif ($next_char eq ']') {
+        # Look for OSC
+        if (my ($p_s, $p_t) = $line =~ m{^\] (\d+) ; (.+?) $bell}x) {
+          substr $line, 0, length("]$p_s;$p_t") + 1, '';
+        }
+      }
+      else {
+        # none
+      }
+    }
+    elsif ($ord == 13) {
+      # none
+    }
+    elsif ($ord == 10) {
+      print $oh "\n";
+    }
+    elsif ($ord < 32) {
+      # none
+    }
+    elsif ($ord > 126) {
+      # none
+    }
+    else {
+      print $oh $char;
+    }
+  }
+}
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut

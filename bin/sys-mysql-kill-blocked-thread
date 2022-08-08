@@ -111,6 +111,12 @@ my $dbpre = MySQL::dbh->new(
 my $dbh = $dbpre->get_dbh( $database, { AutoCommit => 1 } ) or
                             die "Can't get dbh.. $host:$port";
 
+my $sth_ver = $dbh->selectrow_hashref("select substring(version(), 1, 3) as ver") or die $dbh->errstr();
+if ($sth_ver->{ver} >= 8.0) {
+  print "db version $sth_ver->{ver}, ignore.\n";
+  exit 0;
+}
+
 my $cur_threadid = $dbh->{'mysql_thread_id'};
 
 my $sql_block_info =<<"SQL_END";

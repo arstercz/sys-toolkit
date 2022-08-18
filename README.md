@@ -59,6 +59,7 @@ Table of Contents
 * [sys-mysql-purge-binlog](#sys-mysql-purge-binlog)
 * [sys-mysql-qps](#sys-mysql-qps)
 * [sys-mysql-repl](#sys-mysql-repl)
+* [sys-mysql-report](#sys-mysql-report)
 * [sys-mysql-set-maxconnections](#sys-mysql-set-maxconnections)
 * [sys-mysql-sql-reject](#sys-mysql-sql-reject)
 * [sys-mysql-diff](#sys-mysql-diff)
@@ -1526,6 +1527,40 @@ read_only           0
   read_only           1
   repl_check          OK
 ```
+use help option to read more.
+
+[Back to TOC](#table-of-contents)
+
+sys-mysql-report
+================
+
+`type: Bash`
+
+Report MySQL information nicely. fork from [pt-mysql-summary 3.4.0](https://www.percona.com/doc/percona-toolkit/LATEST/pt-mysql-summary.html), but add more features:
+```
+1. add database size section, sort by database size;
+2. add innodb wait count section, response to innodb blocked blocker;
+3. add innodb longest trx section, to get longest trx sql info;
+4. add innodb blocked blocker section, to get blocked sql info;
+5. record mysql open tables info;
+```
+
+#### Usage
+
+```
+# get report and save samples to /tmp/save_3396_1
+$ wt-mysql-report --save-samples /tmp/save_3396_1 --host 10.1.1.26 --port 3396 --user root --ask-pass
+
+# details report file
+$ ls /tmp/save_3396_1
+collect.err             innodb-status      mysql-data-size     mysql-master-logs    mysql-plugins      mysql-slave        mysql-status-defer  ndb-status
+innodb-blocked-blocker  mysql-config-file  mysqld-executables  mysql-master-status  mysql-processlist  mysql-slave-hosts  mysql-users
+innodb-longest-trx      mysql-databases    mysqld-instances    mysql-open-tables    mysql-roles        mysql-status       mysql-variables
+
+# read samples from /tmp/save_3396_1 and get the report
+$ wt-mysql-report --read-samples /tmp/save_3396_1 --host 10.1.1.26 --port 3396 --user root --ask-pass
+```
+
 use help option to read more.
 
 [Back to TOC](#table-of-contents)

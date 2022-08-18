@@ -34,6 +34,7 @@ bin/sys-mysql-kill-long-query
 bin/sys-mysql-purge-binlog
 bin/sys-mysql-qps
 bin/sys-mysql-repl
+bin/sys-mysql-report
 bin/sys-mysql-search
 bin/sys-mysql-set-maxconnections
 bin/sys-mysql-summary

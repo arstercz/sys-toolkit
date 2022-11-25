@@ -1,0 +1,80 @@
+#!/bin/bash
+# get file path from glusterfs gfid
+# read more from 
+#   https://wenhan.blog/post/gluster-filename-and-gfid/
+#   https://gist.github.com/louiszuckerman/4392640
+
+if [[ "$#" < "2" || "$#" > "3" ]]; then
+  cat <<END
+Glusterfs GFID resolver -- turns a GFID into a real file path
+ 
+Theory:
+The .glusterfs directory in the brick root has files named by GFIDs
+If the GFID identifies a directory, then this file is a symlink to the
+actual directory.  If the GFID identifies a file then this file is a
+hard link to the actual file.
+
+  Usage: $0 /data/gfs_brick/dl_resource 9f880673-f47f-458c-b0a5-46316f9377b0
+END
+exit
+fi
+
+BRICK="$1"
+ 
+GFID="$2"
+GP1=`cut -c 1-2 <<<"$GFID"`
+GP2=`cut -c 3-4 <<<"$GFID"`
+GFIDPRE="$BRICK"/.glusterfs/"$GP1"/"$GP2"
+GFIDPATH="$GFIDPRE"/"$GFID"
+ 
+if [[ "$#" == "2" ]]; then
+  echo -ne "$GFID == "
+fi
+
+ 
+if [[ -h "$GFIDPATH" ]]; then
+  if [[ "$#" == "2" ]]; then
+    echo -ne "Directory:\t"
+  fi
+  DIRPATH="$GFIDPRE"/`readlink "$GFIDPATH"`
+  echo $(cd $(dirname "$DIRPATH"); pwd -P)/$(basename "$DIRPATH")
+else
+  if [[ "$#" == "2" ]]; then
+    echo -ne "File:\t"
+  fi
+  INUM=`ls -i "$GFIDPATH" | cut -f 1 -d \ `  
+  find "$BRICK" -inum "$INUM" ! -path \*.glusterfs/\*
+fi
+
+: <<'DOCUMENTATION'
+=pod
+
+=head1 NAME
+
+sys-gluterfs-fgidpath
+
+=head1 SYNOPSIS
+
+  Usage: sys-glusterfs-fgidpath <brick-path> <gfid> [-q]
+
+  <brick-path> : the path to your glusterfs brick (required)
+  
+  <gfid> : the gfid you wish to resolve to a real path (required)
+  
+  -q : quieter output (optional)
+       with this option only the actual resolved path is printed.
+       without this option $0 will print the GFID, 
+       whether it identifies a file or directory, and the resolved
+       path to the real file or directory.
+ 
+=head1 AUTHOR
+
+https://github.com/louiszuckerman
+
+=head1 VERSION
+
+sys-glusterfs-gfidpath 0.1.0
+
+=cut
+
+DOCUMENTATION

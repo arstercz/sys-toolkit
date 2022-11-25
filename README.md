@@ -33,6 +33,7 @@ Table of Contents
 * [sys-stalk](#sys-stalk)
 * [sys-summary](#sys-summary)
 * [sys-glusterfs-rm](#sys-glusterfs-rm)
+* [sys-glusterfs-gfidpath](#sys-glusterfs-gfidpath)
 * [sys-google-totp](#sys-google-totp)
 * [sys-traffic-capture](#sys-traffic-capture)
 * [sys-diskstats](#sys-diskstats)
@@ -1254,6 +1255,22 @@ help message: `sys-glusterfs-rm --help`
 
 [Back to TOC](#table-of-contents)
 
+
+sys-glusterfs-gfidpath
+======================
+
+`type: shell`
+
+turns a GFID into a real file path.
+
+### Usage:
+
+```
+$ sys-glusterfs-gfidpath /export/gfs_brick/dl_resource 9f880673-f47f-458c-b0a5-46316f9377b0
+9f880673-f47f-458c-b0a5-46316f9377b0 == File: /export/gfs_brick/dl_resource/.trashcan/archive/Qtest.qmlc.zip_2022-11-24_040445_+0000
+```
+
+[Back to TOC](#table-of-contents)
 
 sys-daemon
 ==========

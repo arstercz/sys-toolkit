@@ -1,0 +1,1794 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+sys-mysql-pitr -- recover mysql based on PITR(point in time recover)
+
+=head1 SYNOPSIS
+
+Usage:  [OPTION...]
+
+=head1 RISKS
+
+  currently, only support mysqldump + binlog;
+
+  The connect user(binlog-dump) must have REPLICATION SLAVE, and
+  SHOW DATABSES privileges, and ALL privileges on pitr-nstance.
+
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long qw(:config no_ignore_case);
+use English '-no_match_vars';
+use POSIX qw(strftime);
+use Data::Dumper;
+
+my $conf     = '/etc/wt-pitr.conf';
+my $database = 'information_schema';
+my $help     = 0;
+my $verbose  = 0;
+my $force    = 0;
+my $update   = 0;
+my $decom    = 1;
+my $full     = 0;
+my $nocolor  = 0;
+my $stoptime;
+my $sql;
+
+GetOptions(
+    "conf|c=s"     => \$conf,
+    "database|d=s" => \$database,
+    "sql|s=s"      => \$sql,
+    "force!"       => \$force,
+    "full!"        => \$full,
+    "update!"      => \$update,
+    "decom!"       => \$decom,
+    "nocolor!"     => \$nocolor,
+    "stoptime|e=s" => \$stoptime,
+    "verbose|v!"   => \$verbose,
+    "help!"        => \$help,
+) or die "option error: $!";
+
+if ($help) {
+    usage($0);
+}
+
+sub usage {
+    my $name = shift;
+    system("perldoc $name");
+    exit 0;
+}
+
+# force flush
+$| = 1;
+
+# Setting up the colors for the print styles
+my $good = ( $nocolor == 0 ) ? "[\e[0;32mOK\e[0m]"  : "[OK]";
+my $bad  = ( $nocolor == 0 ) ? "[\e[0;31m!!\e[0m]"  : "[!!]";
+my $info = ( $nocolor == 0 ) ? "[\e[0;34m--\e[0m]"  : "[--]";
+my $warn = ( $nocolor == 0 ) ? "[\e[0;33m^^\e[0m]"  : "[^^]";
+my $deb  = ( $nocolor == 0 ) ? "[\e[0;31mDG\e[0m]"  : "[DG]";
+my $end  = ( $nocolor == 0 ) ? "\e[0m"              : "";
+
+# Functions that handle the print styles
+sub prettyprint {
+    print Utils::current_time() . " " . $_[0] . "\n";
+}
+sub goodprint  { prettyprint $good. " " . $_[0] unless ( $nocolor == 1 ); }
+sub infoprint  { prettyprint $info. " " . $_[0] unless ( $nocolor == 1 ); }
+sub warnprint  { prettyprint $warn. " " . $_[0] unless ( $nocolor == 1 ); }
+sub badprint   { prettyprint $bad. " " . $_[0]  unless ( $nocolor == 1 ); }
+sub debugprint { prettyprint $deb. " " . $_[0]  unless ( $nocolor == 1 ); }
+
+$conf = "./$conf" if $conf && $conf =~ /^[^\/]/;
+$sql  = "./$sql" if $sql && $sql =~ /^[^\/]/;
+
+unless ((defined $sql && -e "$sql")) {
+    badprint "sql file [$sql] is not defined/exist!";
+    exit 1;
+}
+
+unless ((defined $sql && -e "$conf")) {
+    badprint "conf [$conf] is not defined/exist!";
+    exit 1;
+}
+
+unless (defined $stoptime) {
+  warnprint "must set stoptime!";
+  exit 1;
+}
+
+# check dump file is whether ok or not.
+sub is_sql_dump_broken {
+  my $file = shift;
+
+  my $out = Utils::exec_cmd_return("tail -n 2 $file | grep 'Dump completed'");
+  
+  # ok if get out
+  if (defined $out && length($out)) {
+    return 0;
+  }
+
+  return 1;
+}
+
+sub get_master_params {
+  my $file = shift;
+
+  my $out = Utils::exec_cmd_return("head -n 50 $file | grep 'CHANGE MASTER'");
+  return unless defined $out;
+
+  my ($log_file, $log_pos) 
+    = ($out =~ m/MASTER_LOG_FILE=\'(\S+?)\',\s+MASTER_LOG_POS=(\d+)/i);
+  return if (!defined($log_file) or !defined($log_pos));
+
+  return ($log_file, $log_pos);
+}
+
+
+sub _gen_mysqldump_opt {
+  my ($cfg, $server_id, $dbh_pitr) = @_;
+
+  my $path    = $cfg->{'mysql-bindir'}->{path};
+  my $tempdir = $cfg->{'temp_dir'}->{path};
+
+  my $ref  = $cfg->{'binlog-dump'};
+  my $sid  = $server_id + 1; # diff with master server id;
+  my $charset = $ref->{'charset'} || 'utf8';
+
+  my $cmd = "MYSQL_PWD=" . "'" . $ref->{password} . "'" . " ";
+  $cmd    .= Utils::fuzzy_path($path)
+          . "/mysqlbinlog" . " "
+          . "--verbose "
+          . "--host " . $ref->{host} . " "
+          . "--port " . $ref->{port} . " "
+          . "--user " . $ref->{user} . " "
+          . "-R -t "
+          . "--base64-output " . "auto" . " "
+          . "--set-charset " . $charset . " "
+          . "--connection-server-id " . $sid . " ";
+
+         # . "--password=" . "'" . $ref->{password} . "'" . " "
+  if (defined $dbh_pitr && ! $dbh_pitr->has_gtid()) {
+    infoprint "pitr-instance disabled gtid, will add --skip-gtids option";
+    $cmd .= "--skip-gtids" . " ";
+  }
+  
+  return $cmd;
+}
+
+sub get_event_time {
+  my ($cfg, $server_id, $log, $at_pos, $end_pos) = @_;
+  my $cmd_pre = _gen_mysqldump_opt($cfg, $server_id);
+
+  my $cmd = $cmd_pre . " "
+          . "--start-position " . $at_pos . " "
+          . "--stop-position "  . $end_pos . " "
+          . $log . " 2>&1";
+
+  debugprint "[cmd] $cmd" if $verbose;
+
+  my $out = Utils::exec_cmd_return("$cmd | grep -P 'server\\s+id\\s+$server_id\\s+end_log_pos\\s+$end_pos'");
+  return unless defined $out;
+
+  my ($ts) 
+    = ($out =~ m/#(\d+\s+\d+:\d+:\d+)\s+/i);
+
+  return unless defined $ts;
+  return $ts;
+}
+
+sub is_get_event_range_ok {
+  my ($cfg, $dbh_pitr, $server_id, $db, $log, $at_pos, $stoptime, $sqlfile) = @_;
+  my $cmd_pre = _gen_mysqldump_opt($cfg, $server_id, $dbh_pitr);
+
+  my $cmd = $cmd_pre . " "
+          . "-r $sqlfile" . " "
+          . "--start-position " . $at_pos . " "
+          . "--stop-datetime " . "'" . $stoptime . "'" . " ";
+
+  if ($db ne 'information_schema') {
+     $cmd .= "--database " . $db . " ";
+  }
+  $cmd .= $log . " 2>&1";
+
+  debugprint "[cmd] $cmd" if $verbose;
+
+  my ($high, $low) = Utils::exec_system("$cmd");
+  if ($high != 0 || $low != 0) {
+    badprint "[error] mysqlbinlog remote event error! high: $high, low: $low";
+    return 0;
+  }
+
+  return 1;
+}
+
+sub get_dbhelper {
+  my $ref = shift;
+
+  return undef unless defined $ref->{host};
+  my $dbpre = MySQL::dbh->new(
+    host     => $ref->{host},
+    port     => $ref->{port},
+    user     => $ref->{user},
+    password => $ref->{password},
+    charset  => $ref->{charset} || 'utf8',
+    driver   => 'mysql',
+    timeout  => $ref->{timeout} || 3,
+  );
+
+  my ($dbh, $dbhelper);
+  $dbh = $dbpre->get_dbh('information_schema', {AutoCommit => 1});
+  unless (defined $dbh) {
+    badprint "MySQL::dbh error: $@";
+    return undef;
+  }
+
+  eval {
+    $dbhelper = MySQL::Helper->new(dbh => $dbh);
+  };
+  if ($@) {
+    badprint "MySQL::Helper: $@";
+    return undef;
+  };
+
+  return $dbhelper;
+}
+
+sub _gen_my_cnf {
+  my $conf = shift;
+  my $ref  = shift;
+      
+  my $err;
+  open my $fh, ">", $conf
+    or $err = $!;
+  
+  if (defined($err)) {
+    warnprint "[warn] gen $conf error: $err, ignore ...";
+    return 0;
+  }
+  
+  print $fh "[client]\n";
+  foreach my $k (qw(user password)) {
+    print $fh "$k" . "=" . $ref->{$k} . "\n";
+  }
+  close($fh);
+  return 1;
+}
+
+sub is_pitr_recover_ok {
+  my ($cfg, $rt, $full, $update, $version, $db, $sql, $sql_incr) = @_;
+
+  if (! -e $sql or ! -e $sql_incr) {
+    badprint "[error] $sql or $sql_incr is not exists";
+    return 0;
+  }
+
+  my $ref  = $cfg->{'pitr-instance'};
+  my $conf = Utils::fuzzy_path($cfg->{temp_dir}->{path})
+           . "/"
+           . $ref->{host}
+           . "-"
+           . $ref->{port}
+           . ".conf";
+
+  if (_gen_my_cnf($conf, $ref)) {
+    debugprint "[verbose] gen $conf ok!" if $verbose;
+  }
+  else {
+    badprint "[error] gen $conf error!";
+    return 0;
+  }
+
+  my $cmd = Utils::fuzzy_path($cfg->{'mysql-bindir'}->{path})
+          . "/mysql" . " "
+          . "--defaults-file=" . $conf . " "
+          . "--host " . $ref->{host} . " "
+          . "--port " . $ref->{port} . " ";
+
+   my $full_cmd = $cmd . " < " . $sql;
+
+   if ($db ne 'information_schema') {
+        $cmd .= "--database " . $db . " "
+   }
+   my $incr_cmd = $cmd . " < " . $sql_incr;
+
+   if (($rt == 0 or $rt == 1 or $rt == 2 or $rt == 3)) {
+      debugprint "[verbose] $full_cmd" if $verbose;
+      if ($full) {
+        infoprint "begining full backup recover - $sql";
+        my ($high, $low) = Utils::exec_system("$full_cmd");
+        if ($high != 0 || $low != 0) {
+          badprint "[error] mysql full backup recover $sql error! high: $high, low: $low";
+          unlink $conf;
+          return 0;
+        }
+        else {
+          goodprint "mysql full backup recover $sql ok";
+        }
+      }
+      else {
+        if ($rt == 0 or $rt == 2) {
+          warnprint "[warn] rt:$rt pitr-instance is empty or database is not exists, ignore...";
+          return 0;
+        }
+        else {
+          infoprint "no --full option, will ignore full backup recover." unless $full;
+        }
+      }
+   }
+
+   if ($rt == 4) {
+     warnprint "[warn] unkown rt, skip ...";
+     return 0;
+   }
+
+   debugprint "[verbose] $incr_cmd" if $verbose;
+   infoprint "begining increment backup recover - $sql_incr";
+   my ($high, $low) = Utils::exec_system("$incr_cmd");
+   if ($high != 0 || $low != 0) {
+     badprint "[error] mysql binlog dump recover $sql_incr error! high: $high, low: $low";
+     unlink $conf;
+     return 0;
+   }
+   else {
+     goodprint "mysql binlog dump recover $sql_incr ok";
+   }
+
+   unlink $conf;
+   return 1;
+}
+
+# -1: db error;
+#  0: db is ok, but empty;
+#  1: db is ok;
+#  2: db is ok, but the database(option) is not exists in db;
+#  3: db is ok, but not set --database option;
+#  4: the other;
+
+sub pitr_instance_status {
+  my $dbh  = shift;
+  my $mver = shift;
+  my $db   = shift;
+
+  return -1 unless defined $dbh;
+
+  my $ver = $dbh->get_version();
+
+  if ($mver ne $ver) {
+    warnprint "[warn] different mysql version in binlog-dump[$mver] and pitr-instance[$ver]";
+    warnprint "[warn] be aware of the potential risks";
+  }
+
+  my $dbs = $dbh->get_database_list();
+  if (!defined $dbs) {
+    warnprint "[warn] no database in pitr-instance, must recover the full backup first! see --full option";
+    return 0;
+  }
+
+  undef $db if $db eq 'information_schema';
+  # ignore force
+  if (defined $db) {
+    if (db_in_list($dbs, $db)) {
+      goodprint "$db is in pitr-instance, will be overwrite if set --full option";
+      return 1;
+    }
+    else {
+      warnprint "[warn] database($db) is not in pitr-instance, must recover the full backup first! see --full option";
+      return 2;
+    }
+  }
+  else {
+    infoprint "not set --database option, used with --full option";
+    return 3;
+  }
+
+  return 4;
+}
+
+sub db_in_list {
+  my $lists = shift;
+  my $db    = shift;
+  my $force = shift || 0;
+
+  my $status = 0;
+
+  # the master maybe drop database, so we
+  # add force to ensure db is in list
+  return 1 if $force;
+  
+  foreach my $k (@$lists) {
+    if ($k eq $db) {
+      $status = 1;
+      last;
+    }
+  }
+
+  return $status;
+}
+
+sub _is_support_type {
+  my $type = shift;
+
+  my $status = 0;
+  foreach my $k (qw(gz zst lz4)) {
+    if ($type eq $k) {
+      $status = 1;
+      last;
+    }
+  }
+
+  return $status;
+}
+
+# eg: 20230124011004-dbname.sql.zst
+sub sql_format_get {
+  my $sql = shift;
+  my $t   = Utils::get_file_type($sql) || 'unknown';
+
+  if ($t eq 'sql') {
+    return 1;
+  }
+
+  if (_is_support_type($t)) {
+    return 2;
+  }
+
+  # unknown format
+  return 3;
+}
+
+sub trim_compress_type {
+  my $sql = shift;
+  my $t   = Utils::get_file_type($sql) || 'unknown';
+
+  return $sql if $t eq 'sql';
+  $sql =~ s/\.$t$//i;
+
+  return $sql;
+}
+
+sub initial_cfg {
+  my $ref = shift;
+
+  $ref->{'mysql-bindir'}->{path} ||= '/usr/bin';
+  $ref->{'temp_dir'}->{path} ||= '/tmp/mysql_pitr';
+
+  Utils::create_dir_if($ref->{'temp_dir'}->{path});
+
+  return $ref;
+}
+
+my $format = sql_format_get($sql);
+
+if ($format > 1) {
+  infoprint "the file $sql maybe in compress..";
+  if ($format == 3) {
+    badprint "[error] unknown format file $sql, maybe need decompress manually!";
+    exit 1;
+  }
+
+  if ($format == 2) {
+    if ($decom) {
+      infoprint "try to decompress $sql";
+      if (Utils::decompress_file($sql)) {
+        goodprint "decompress $sql ok";
+        $sql = trim_compress_type($sql);
+      }
+    }
+    else {
+      warnprint "[warn] need decompress the file $sql, try to use the --decom option.";
+      exit 1;
+    }
+  }
+}
+
+if (is_sql_dump_broken($sql)) {
+  badprint "[error] the $sql maybe broken, try to mysqldump again!";
+  exit 2;
+}
+
+my ($log_file, $log_pos) = get_master_params($sql);
+if (!defined($log_file) or !defined($log_pos)) {
+  badprint "[error] cann't get master position from $sql, try to mysqldump with --master-data=2 option!";
+  exit 3;
+}
+
+# parse cfg to get mysql connections
+my $cf     = initial_cfg(Utils::parsecfg_file($conf));
+my $dbhelp_dump = get_dbhelper($cf->{'binlog-dump'});
+my $dbhelp_pitr = get_dbhelper($cf->{'pitr-instance'});
+
+my ($server_id, $end_pos) = $dbhelp_dump->get_binlog_event($log_file, $log_pos);
+if (!defined($server_id) or !defined($end_pos)) {
+  badprint "[error] cann't parse event on $log_file with pos $log_pos";
+  exit 4;
+}
+
+infoprint "get server_id:$server_id, log_file:$log_file, at_pos:$log_pos, end_pos:$end_pos";
+
+my $first_ts = get_event_time($cf, $server_id, $log_file, $log_pos, $end_pos);
+if (Utils::mysql_ts_to_timestamp($first_ts) > Utils::mysql_ts_to_timestamp($stoptime)) {
+  badprint "[error] stoptime $stoptime is less than $log_file:$log_pos event time($first_ts)";
+  exit 5;
+}
+
+infoprint "get $log_file: $log_pos($first_ts)";
+
+if ($database) {
+  my $dbs = $dbhelp_dump->get_database_list();
+  if ($database ne 'information_schema' && !db_in_list($dbs, $database, $force)) {
+    badprint "[error] the database '$database' is not in master instance.";
+    exit 6;
+  }
+}
+
+my $sql_increment = Utils::fuzzy_path($cf->{'temp_dir'}->{path})
+                  . "/" 
+                  . $cf->{'binlog-dump'}->{host}
+                  . "_"
+                  . $cf->{'binlog-dump'}->{port}
+                  . "-"
+                  . $server_id . "_" . $log_pos . ".sql";
+
+if (is_get_event_range_ok($cf, $dbhelp_pitr, $server_id, $database, $log_file, $log_pos, $stoptime, $sql_increment)) {
+  goodprint "generate increment sql $sql_increment";
+}
+else {
+  badprint "[error] generate increment sql $sql_increment";
+  exit 7;
+}
+
+goodprint "generate increment ok, $log_pos($first_ts) ~ $stoptime";
+
+if ($update) {
+  infoprint "will import the $sql or $sql_increment";
+  my $rt = pitr_instance_status($dbhelp_pitr, $dbhelp_dump->get_version(), $database);
+  if ($rt < 0) {
+    badprint "[error] instance 'pitr-instance' error, ignore recover";
+    exit 8;
+  }
+
+  if (is_pitr_recover_ok($cf, $rt, $full, $update, $dbhelp_dump->get_version(), $database, $sql, $sql_increment)) {
+    goodprint "pitr recover ok, from $log_file:$log_pos($first_ts) to ($stoptime)";
+  }
+  else {
+    badprint "[error] pitr recover error, from $log_file:$log_pos($first_ts) to ($stoptime)";
+    badprint "[error] try to check the $sql and $sql_increment file.";
+    exit 9;
+  }
+}
+
+# ###################################################################
+# Documentation.
+# ###################################################################
+=head1 OPTIONS
+
+=over 4
+
+=item conf
+
+conf file that pitr will use. include 4 section:
+
+  binlog-dump:   the master instance, we'll connect and get remote mysql binlog;
+  mysql-bindir:  local bin dir, will invoke mysqlbin and mysql command;
+  temp_dir:      the temporary directory, will save the middle file;
+  pitr-instance: the target instance, we'll import full and increment sql file to it;
+
+  the conf eg:
+    [binlog-dump]
+    host=master_ip
+    port=master_port
+    user=xxx
+    password=xxxxxxxxx
+    charset=utf8
+
+    [mysql-bindir]
+    path=/opt/Percona-Server-5.7.33-36-Linux.x86_64.glibc2.12/bin
+
+    [temp_dir]
+    path=/data/mysql_pitr
+
+    [pitr-instance]
+    host=127.0.0.1
+    port=3300
+    user=root
+    password=xxxxxx
+    charset=utf8
+
+=item database
+
+if set this option, only dump the database as increment sql file from binlog-dump, 
+like 'mysqlbinlog --database xxx', if not set, will dump all database as increment
+sql file.
+
+=item force
+
+default is false, the binlog-dump maybe not exist the --database or had dropped 
+the --database, this option will force dump if can not found the --database.
+
+=item sql
+
+the sql file as the full backup, support 4 format, eg:
+  bak-20230412130015.sql.gz
+  bak-20230412130015.sql.lz4
+  bak-20230412130015.sql.zst
+  bak-20230412130015.sql
+
+=item stoptime
+
+the pitr time point, sql_increment will stop if binlog event time greater than stoptime.
+
+=item decom
+
+default is false, if set, will try to decompress the sql file if it in gz, lz4, zstd format;
+
+=item update
+
+default is false, if set update option, and the conf has 'pitr-instance', we'll try to 
+recover both of the sql(full backup) and sql_increment(increment backup). 
+
+=item full
+
+default is false, if set, will do full backup recover event if pitr_instance is empty or 
+already exists; if not set, will ignore full backup, and only do increment recover.
+
+=item nocolor
+
+default is true, if set, will print all msg with color
+
+=item verbose
+
+default is false, if set, will print more msg, include the command that execute.
+
+=item help
+
+default is false, get more help message.
+
+=back
+
+=head1 AUTHOR
+
+zhe.chen <chenzhe07@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut
+
+package MySQL::dbh;
+# Get the database handle which user use, and this database
+# handle object should be destroy when leave MySQL database.
+use strict;
+use warnings FATAL => 'all';
+use constant DEBUG => $ENV{DEBUG} || 0;
+use English qw(-no_match_vars);
+use DBI;
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+
+use Data::Dumper;
+$Data::Dumper::Indent    = 1;
+$Data::Dumper::Sortkeys  = 1;
+$Data::Dumper::Quotekeys = 0;
+
+require Exporter;
+@ISA     = qw(Exporter);
+@EXPORT  = qw( get_dbh disconnect );
+$VERSION = '0.1.0';
+
+eval { require DBI; };
+
+if ($@) {
+    die "Cannot connect to MySQL because the Perl DBI module is not "
+      . "installed or not found.  Run 'perl -MDBI' to see the directories "
+      . "that Perl searches for DBI.  If DBI is not installed, try:\n"
+      . "  Debian/Ubuntu  apt-get install libdbi-perl\n"
+      . "  RHEL/CentOS    yum install perl-DBI\n"
+      . "  OpenSolaris    pkg install pkg:/SUNWpmdbi\n";
+}
+
+sub host {
+    my $self = shift;
+    $self->{host} = shift if @_;
+    return $self->{host};
+}
+
+sub port {
+    my $self = shift;
+    $self->{port} = shift if @_;
+    return $self->{port};
+}
+
+sub user {
+    my $self = shift;
+    $self->{user} = shift if @_;
+    return $self->{user};
+}
+
+sub password {
+    my $self = shift;
+    $self->{password} = shift if @_;
+    return $self->{password};
+}
+
+sub charset {
+    my $self = shift;
+    $self->{charset} = shift if @_;
+    return $self->{charset};
+}
+
+sub driver {
+    my $self = shift;
+    $self->{driver} = shift if @_;
+    return $self->{driver};
+}
+
+sub timeout {
+    my $self = shift;
+    $self->{timeout} = shift if @_;
+    return $self->{timeout};
+}
+
+sub read_timeout {
+    my $self = shift;
+    $self->{read_timeout} = shift if @_;
+}
+
+sub write_timeout {
+    my $self = shift;
+    $self->{write_timeout} = shift if @_;
+}
+
+sub ssl_setup {
+    my $self   = shift;
+    my $params = shift if @_;
+    $self->{mysql_ssl} = $params->{mysql_ssl} || 0;
+    return $self->{mysql_ssl} unless $self->{mysql_ssl} == 1;
+
+    $self->{mysql_ssl_client_key}  = $params->{mysql_ssl_client_key} || undef;
+    $self->{mysql_ssl_client_cert} = $params->{mysql_ssl_client_cert} || undef;
+    $self->{mysql_ssl_ca_file}     = $params->{mysql_ssl_ca_file} || undef;
+}
+
+sub new {
+    my ( $class, %args ) = @_;
+    my @required_args = qw(host port user password);
+    DEBUG && print Dumper(%args);
+
+    foreach my $arg (@required_args) {
+        warn "I need a $arg argument" unless exists $args{$arg};
+    }
+
+    my $self = {};
+    bless $self, $class;
+
+    # options should be used.
+    $self->host( $args{'host'}         || 127.0.0.1 );
+    $self->port( $args{'port'}         || 3306 );
+    $self->user( $args{'user'});
+    $self->password( $args{'password'});
+    $self->charset( $args{'charset'}   || 'utf8' );
+    $self->driver( $args{'driver'}     || 'mysql' );
+    $self->timeout( $args{'timeout'}   || 3 );
+    $self->read_timeout( $args{'read_timeout'} || 300 );
+    $self->write_timeout( $args{'write_timeout'} || 60 );
+    $self->ssl_setup( $args{'ssl_params'} || undef );
+
+    return $self;
+}
+
+sub get_dbh {
+    my ( $self, $database, $opts ) = @_;
+    $opts ||= {};
+    my $host     = $self->{host};
+    my $port     = $self->{port};
+    my $user     = $self->{user};
+    my $password = $self->{password};
+    my $charset  = $self->{charset};
+    my $driver   = $self->{driver};
+    my $timeout  = $self->{timeout};
+    my $read_timeout  = $self->{read_timeout};
+    my $write_timeout = $self->{write_timeout};
+
+    my $defaults = {
+        AutoCommit         => 1,
+        RaiseError         => 1,
+        PrintError         => 0,
+        ShowErrorStatement => 1,
+        mysql_enable_utf8  => ( $charset =~ m/utf8/i ? 1 : 0 ),
+    };
+    @{$defaults}{ keys %$opts } = values %$opts;
+
+    #if ( $opts->{mysql_use_result} ) {
+    #    $defaults->{mysql_use_result} = 1;
+    #}
+
+    my $dbh;
+    my $tries = 2;
+    while ( !$dbh && $tries-- ) {
+        DEBUG
+          && print Dumper(
+            join( ', ', map { "$_=>$defaults->{$_}" } keys %$defaults ) );
+        my $dsn;
+        $dbh = eval {
+            if ($self->{mysql_ssl}
+                && (-e $self->{mysql_ssl_client_key} 
+                     && -e $self->{mysql_ssl_client_cert} 
+                     && -e $self->{mysql_ssl_ca_file})
+               ) {
+                $dsn = "DBI:$driver:mysql_connect_timeout=$timeout:mysql_read_timeout=$read_timeout:mysql_write_timeout=$write_timeout:database=$database;host=$host;port=$port;"
+                     . "mysql_ssl=1;mysql_ssl_client_key=$self->{mysql_ssl_client_key};"
+                     . "mysql_ssl_client_cert=$self->{mysql_ssl_client_cert};"
+                     . "mysql_ssl_ca_file=$self->{mysql_ssl_ca_file}";
+            }
+            else {
+                $dsn = "DBI:$driver:mysql_connect_timeout=$timeout:mysql_read_timeout=$read_timeout:mysql_write_timeout=$write_timeout:database=$database;host=$host;port=$port";
+            }
+
+            DBI->connect($dsn, $user, $password, $defaults );
+        };
+
+        if ( !$dbh && $@ ) {
+            if ( $@ =~ m/locate DBD\/mysql/i ) {
+                warn
+"Cannot connect to MySQL because the Perl DBD::mysql module is "
+                  . "not installed or not found.  Run 'perl -MDBD::mysql' to see "
+                  . "the directories that Perl searches for DBD::mysql.  If "
+                  . "DBD::mysql is not installed, try:\n"
+                  . "  Debian/Ubuntu  apt-get install libdbd-mysql-perl\n"
+                  . "  RHEL/CentOS    yum install perl-DBD-MySQL\n"
+                  . "  OpenSolaris    pgk install pkg:/SUNWapu13dbd-mysql\n";
+            }
+            elsif ( $@ =~ m/not a compiled character set|character set utf8/i )
+            {
+                DEBUG && print 'Going to try again without utf8 support\n';
+                delete $defaults->{mysql_enable_utf8};
+            }
+            if ( !$tries ) {
+                warn "$@";
+                return;
+            }
+
+        }
+    }
+
+    if ( $driver =~ m/mysql/i ) {
+        my $sql;
+        $sql = 'SELECT @@SQL_MODE';
+        DEBUG && print "+-- $sql\n";
+
+        my ($sql_mode) = eval { $dbh->selectrow_array($sql) };
+        warn "Error getting the current SQL_MORE: $@" if $@;
+
+        if ($charset) {
+            $sql = qq{/*!40101 SET NAMES "$charset"*/};
+            DEBUG && print "+-- $sql\n";
+            eval { $dbh->do($sql) };
+            warn "Error setting NAMES to $charset: $@" if $@;
+            DEBUG && print "Enabling charset to STDOUT\n";
+            if ( $charset eq 'utf8' ) {
+                binmode( STDOUT, ':utf8' )
+                  or warn "Can't binmode(STDOUT, ':utf8'): $!\n";
+            }
+            else {
+                binmode(STDOUT) or warn "Can't binmode(STDOUT): $!\n";
+            }
+        }
+
+        $sql =
+            'SET @@SQL_QUOTE_SHOW_CREATE = 1'
+          . '/*!40101, @@SQL_MODE=\'NO_AUTO_VALUE_ON_ZERO'
+          . ( $sql_mode ? ",$sql_mode" : '' ) . '\'*/';
+        DEBUG && print "+-- $sql\n";
+        eval { $dbh->do($sql) };
+        warn "Error setting SQL_QUOTE_SHOW_CREATE, SQL_MODE"
+          . ( $sql_mode ? " and $sql_mode" : '' ) . ": $@"
+          if $@;
+    }
+
+    if (DEBUG) {
+        print Dumper(
+            $dbh->selectrow_hashref(
+'SELECT DATABASE(), CONNECTION_ID(), VERSION()/*!50038, @@hostname*/'
+            )
+        );
+        print "+-- 'Connection info:', $dbh->{mysql_hostinfo}\n";
+        print Dumper(
+            $dbh->selectall_arrayref(
+                "SHOW VARIABLES LIKE 'character_set%'",
+                { Slice => {} }
+            )
+        );
+        print '+-- $DBD::mysql::VERSION:' . "$DBD::mysql::VERSION\n";
+        print '+-- $DBI::VERSION:' . "$DBI::VERSION\n";
+    }
+    return $dbh;
+}
+
+# handle should be destroy.
+sub disconnect {
+    my ( $self, $dbh ) = @_;
+    DEBUG && $self->print_active_handles( $self->get_dbh );
+    $dbh->disconnect;
+}
+
+sub print_active_handles {
+    my ( $self, $thing, $level ) = @_;
+    $level ||= 0;
+    printf(
+        "# Active %sh: %s %s %s\n",
+        ( $thing->{Type} || 'undef' ),
+        "\t" x $level,
+        $thing,
+        ( ( $thing->{Type} || '' ) eq 'st' ? $thing->{Statement} || '' : '' )
+    ) or warn "Cannot print: $OS_ERROR";
+    foreach my $handle ( grep { defined } @{ $thing->{ChildHandles} } ) {
+        $self->print_active_handles( $handle, $level + 1 );
+    }
+}
+
+1;
+
+package MySQL::Helper;
+use strict;
+use warnings FATAL => 'all';
+use English qw(-no_match_vars);
+use Carp qw(croak carp);
+use open ':encoding(utf8)';
+use Data::Dumper;
+
+use constant Status => "Status";
+use constant Errstr => "Errstr";
+use constant DEBUG  => $ENV{DEBUG} || 0;
+
+#show master status output
+use constant File          => "File";
+use constant Position      => "Position";
+use constant Binlog_Do_DB  => "Binlog_Do_DB";
+use constant Binlog_Ignore_DB   => "Binlog_Ignore_DB";
+use constant Binlog_Event_Check => "SHOW BINLOG EVENTS in '%s' FROM %d LIMIT 1";
+use constant Executed_Gtid_Set  => "Executed_Gtid_Set";
+#show slave status output
+use constant Slave_IO_State        => "Slave_IO_State";
+use constant Slave_SQL_Running     => "Slave_SQL_Running";
+use constant Slave_IO_Running      => "Slave_IO_Running";
+use constant Master_Log_File       => "Master_Log_File";
+use constant Master_Host         => "Master_Host";
+use constant Master_User         => "Master_User";
+use constant Master_Port         => "Master_Port";
+use constant Replicate_Do_DB         => "Replicate_Do_DB";
+use constant Replicate_Ignore_DB     => "Replicate_Ignore_DB";
+use constant Replicate_Do_Table      => "Replicate_Do_Table";
+use constant Replicate_Ignore_Table  => "Replicate_Ignore_Table";
+use constant Replicate_Wild_Do_Table => "Replicate_Wild_Do_Table";
+use constant Replicate_Wild_Ignore_Table => "Replicate_Wild_Ignore_Table";
+use constant Read_Master_Log_Pos     => "Read_Master_Log_Pos";
+use constant Relay_Master_Log_File   => "Relay_Master_Log_File";
+use constant Exec_Master_Log_Pos     => "Exec_Master_Log_Pos";
+use constant Relay_Log_File        => "Relay_Log_File";
+use constant Relay_Log_Pos         => "Relay_Log_Pos";
+use constant Seconds_Behind_Master => "Seconds_Behind_Master";
+use constant Last_Errno          => "Last_Errno";
+use constant Last_Error          => "Last_Error";
+use constant Retrieved_Gtid_Set  => "Retrieved_Gtid_Set";
+use constant Auto_Position       => "Auto_Position";
+
+#general sql list
+use constant Show_One_Variable_SQL  => "SHOW GLOBAL VARIABLES LIKE ?";
+use constant Show_Slave_Status_SQL  => "SHOW SLAVE STATUS";
+use constant Show_Processlist_SQL   => "SHOW PROCESSLIST";
+use constant Show_Master_Status_SQL => "SHOW MASTER STATUS";
+use constant Get_Num_Workers_SQL =>
+  "SELECT \@\@global.slave_parallel_workers AS Value";
+use constant Get_MaxAllowedPacket_SQL =>
+  "SELECT \@\@global.max_allowed_packet AS Value";
+use constant Is_Readonly_SQL  => "SELECT \@\@global.read_only As Value";
+use constant Has_Gtid_SQL     => "SELECT \@\@global.gtid_mode As Value";
+use constant Get_ServerID_SQL => "SELECT \@\@global.server_id As Value";
+use constant Has_Backup_Locks => "SELECT \@\@have_backup_locks As Value";
+use constant Unset_Readonly_SQL      => "SET GLOBAL read_only=0";
+use constant Set_Readonly_SQL        => "SET GLOBAL read_only=1";
+use constant Unset_Log_Bin_Local_SQL => "SET sql_log_bin=0";
+use constant Set_Log_Bin_Local_SQL  => "SET sql_log_bin=1";
+use constant Start_IO_Thread_SQL    => "START SLAVE IO_THREAD";
+use constant Stop_IO_Thread_SQL     => "STOP SLAVE IO_THREAD";
+use constant Start_SQL_Thread_SQL   => "START SLAVE SQL_THREAD";
+use constant Stop_SQL_Thread_SQL    => "STOP SLAVE SQL_THREAD";
+use constant Start_Slave_SQL      => "START SLAVE";
+use constant Stop_Slave_SQL       => "STOP SLAVE";
+use constant Get_Version_SQL      => "SELECT VERSION() AS Value";
+use constant Get_Database_ALL_SQL => "SELECT SCHEMA_NAME AS DBS FROM information_schema.SCHEMATA
+WHERE SCHEMA_NAME NOT IN('information_schema')";
+use constant Get_Database_SQL  => "SELECT SCHEMA_NAME AS DBS FROM information_schema.SCHEMATA
+WHERE SCHEMA_NAME NOT IN('mysql','sys','information_schema','performance_schema','test')";
+use constant Get_DB_Tables_SQL => "SELECT TABLE_NAME AS TBS FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = ?";
+use constant Get_DB_Tables_SQL_V2 => "SELECT CONCAT(TABLE_SCHEMA, '.', TABLE_NAME) AS TBS FROM information_schema.TABLES";
+use constant Get_Engine_SQL    => "SELECT DISTINCT(ENGINE) AS ENS FROM information_schema.TABLES
+WHERE TABLE_SCHEMA NOT IN('mysql','sys','information_schema','performance_schema','test') AND ENGINE is NOT NULL";
+use constant Get_Current_Thread_Id  => "SELECT CONNECTION_ID() As Value";
+
+sub new {
+  my ( $class, %args ) = @_;
+  my @required_args = qw(dbh);
+  foreach my $arg (@required_args) {
+    warn "I need a $arg argument" unless $args{$arg};
+  }
+  my $self = {
+    dbh       => undef,
+    connection_id => undef,
+    has_gtid    => undef,
+    is_mariadb  => undef,
+  };
+  bless $self, $class;
+  $self->{dbh} = $args{'dbh'};
+  return $self;
+}
+
+sub get_variable {
+  my $self  = shift;
+  my $query = shift;
+  my $sth   = $self->{dbh}->prepare($query);
+  $sth->execute();
+  my $href = $sth->fetchrow_hashref;
+  return $href->{Value};
+}
+
+# display one value that are not supported by select @@..
+sub show_variable($$) {
+  my $self = shift;
+  my $cond = shift;
+  my $sth  = $self->{dbh}->prepare(Show_One_Variable_SQL);
+  $sth->execute($cond);
+  my $href = $sth->fetchrow_hashref;
+  return $href->{Value};
+}
+
+sub is_binlog_enabled($) {
+  my $self  = shift;
+  my $value = $self->show_variable("log_bin");
+  return 1 if ( defined($value) && $value eq "ON" );
+  return 0;
+}
+
+sub get_binlog_event($$$) {
+  my $self = shift;
+  my $log  = shift;
+  my $pos  = shift;
+
+  my $sql  = sprintf(Binlog_Event_Check, $log, $pos);
+  my $sth  = $self->{dbh}->prepare($sql);
+  $sth->execute();
+
+  my $href = $sth->fetchrow_hashref;
+
+  return unless defined $href;
+  if ($log eq $href->{Log_name} && $pos eq $href->{Pos}) {
+    return ($href->{Server_id}, $href->{End_log_pos})
+  }
+
+  return;
+}
+
+sub disable_log_bin_local($) {
+  my $self = shift;
+  my $sth  = $self->{dbh}->prepare(Unset_Log_Bin_Local_SQL);
+  return $sth->execute();
+}
+
+sub enable_log_bin_local($) {
+  my $self = shift;
+  my $sth  = $self->{dbh}->prepare(Set_Log_Bin_Local_SQL);
+  return $sth->execute();
+}
+
+sub is_read_only($) {
+  my $self = shift;
+  return $self->get_variable(Is_Readonly_SQL);
+}
+
+sub enable_read_only($) {
+  my $self = shift;
+  my $sth  = $self->{dbh}->prepare(Set_Readonly_SQL);
+  if ( $self->is_read_only() eq "1" ) {
+  return 0;
+  }
+  else {
+  return $sth->execute();
+  }
+}
+
+sub disable_read_only($) {
+  my $self = shift;
+  my $sth  = $self->{dbh}->prepare(Unset_Readonly_SQL);
+  if ( $self->is_read_only() eq "0" ) {
+  return 0;
+  }
+  else {
+  return $sth->execute();
+  }
+}
+
+sub start_io_thread($) {
+  my $self = shift;
+  my $sth  = $self->{dbh}->prepare(Start_IO_Thread_SQL);
+  return $sth->execute();
+}
+
+sub stop_io_thread($) {
+  my $self = shift;
+  my $sth  = $self->{dbh}->prepare(Stop_IO_Thread_SQL);
+  return $sth->execute();
+}
+
+sub start_sql_thread() {
+  my $self = shift;
+  my $sth  = $self->{dbh}->prepare(Start_SQL_Thread_SQL);
+  return $sth->execute();
+}
+
+sub stop_sql_thread() {
+  my $self = shift;
+  my $sth  = $self->{dbh}->prepare(Stop_SQL_Thread_SQL);
+  return $sth->execute();
+}
+
+sub start_slave() {
+  my $self = shift;
+  my $sth  = $self->{dbh}->prepare(Start_Slave_SQL);
+  return $sth->execute();
+}
+
+sub stop_slave() {
+  my $self = shift;
+  my $sth  = $self->{dbh}->prepare(Stop_Slave_SQL);
+  return $sth->execute();
+}
+
+sub has_gtid($) {
+  my $self  = shift;
+  my $value;
+  eval {
+    $value = $self->get_variable(Has_Gtid_SQL);
+  };
+  if ($@) {
+    return "Not Support";
+  }
+  if ( defined($value) && $value eq "ON" ) {
+    $self->{has_gtid} = 1;
+    return 1;
+  }
+  return 0;
+}
+
+sub get_num_workers($) {
+  my $self = shift;
+  return $self->get_variable(Get_Num_Workers_SQL);
+}
+
+sub get_version($) {
+  my $self  = shift;
+  my $value = return $self->get_variable(Get_Version_SQL);
+  if ( $value =~ /MariaDB/ ) {
+    $self->{is_mariadb} = 1;
+  }
+  return $value;
+}
+
+sub get_server_id($) {
+  my $self = shift;
+  return $self->get_variable(Get_ServerID_SQL);
+}
+
+sub get_current_thread_id($) {
+  my $self = shift;
+  return $self->get_variable(Get_Current_Thread_Id);
+}
+
+sub get_max_allowed_packet($) {
+  my $self = shift;
+  return $self->get_variable(Get_MaxAllowedPacket_SQL);
+}
+
+sub get_database_list {
+  my $self   = shift;
+  my $is_all = shift;
+  my @dbs;
+  my ($query, $sth, $href);
+  $query = defined $is_all 
+         ? Get_Database_ALL_SQL
+         : Get_Database_SQL;
+  $sth   = $self->{dbh}->prepare($query);
+  $sth->execute();
+
+  while (my $href = $sth->fetchrow_hashref()) {
+    my $db = $href->{DBS};
+    push @dbs, $db;
+  }
+  return \@dbs;
+}
+
+sub get_table_list {
+  my $self = shift;
+  my $db   = shift;
+  my @tables;
+  my $query= Get_DB_Tables_SQL;
+  $query   = Get_DB_Tables_SQL_V2 if !defined($db);
+  my ($sth, $href);
+  $sth = $self->{dbh}->prepare($query);
+  if (defined $db) {
+    $sth->execute($db);
+  }
+  else {
+    $sth->execute();
+  }
+
+  while (my $href = $sth->fetchrow_hashref()) {
+    my $table = $href->{TBS};
+    push @tables, $table;
+  }
+  return \@tables;
+}
+
+sub get_master_filter($) {
+  my $self = shift;
+  my ( $query, $sth, $href );
+  my %values;
+  my $str = "";
+  $query = Show_Master_Status_SQL;
+  $sth   = $self->{dbh}->prepare($query);
+  $sth->execute();
+
+  $href = $sth->fetchrow_hashref;
+  for my $filter_key ( Binlog_Do_DB, Binlog_Ignore_DB ) {
+    if ( length( $href->{$filter_key} ) > 0 ) {
+      $str .= sprintf( "%s: %s; ",
+        lc($filter_key), uniq_and_sort( $href->{$filter_key} ) );
+    }
+  }
+
+  return $str;
+}
+
+sub uniq_and_sort {
+  my $str = shift;
+  my @array = split( /,/, $str );
+  my %count;
+  @array = grep( !$count{$_}++, @array );
+  @array = sort @array;
+  return join( ',', @array );
+}
+
+sub check_slave_status {
+  my $self    = shift;
+  my $allow_dummy = shift;
+  my ( $query, $sth, $href );
+  my %status = ();
+
+  unless ( $self->{dbh} ) {
+    $status{Status} = 1;
+    $status{Errstr} = "Database Handle is not defined!";
+    return %status;
+  }
+
+  $query = Show_Slave_Status_SQL;
+  $sth   = $self->{dbh}->prepare($query);
+  my $ret = $sth->execute();
+  if ( !defined($ret) || $ret != 1 ) {
+
+    # I am not a slave
+    $status{Status} = 1;
+
+    # unexpected error
+    if ( defined( $sth->errstr ) ) {
+      $status{Status} = 2;
+      $status{Errstr} =
+        "Got error when executing "
+        . Show_Slave_Status_SQL . ". "
+        . $sth->errstr;
+    }
+    return %status;
+  }
+
+  $status{Status} = 0;
+  $href = $sth->fetchrow_hashref;
+
+  for my $key (
+    Slave_IO_State,    Master_Host,
+    Master_Port,       Master_User,
+    Slave_IO_Running,    Slave_SQL_Running,
+    Master_Log_File,     Read_Master_Log_Pos,
+    Relay_Master_Log_File, Last_Errno,
+    Last_Error,      Exec_Master_Log_Pos,
+    Relay_Log_File,    Relay_Log_Pos,
+    Seconds_Behind_Master, Retrieved_Gtid_Set,
+    Executed_Gtid_Set,   Auto_Position
+    )
+  {
+    $status{$key} = $href->{$key};
+  }
+
+  if (   !$status{Master_Host}
+    || !$status{Master_Log_File} )
+  {
+    unless ($allow_dummy) {
+
+      # I am not a slave
+      $status{Status} = 1;
+      return %status;
+    }
+  }
+
+  my $str = "";
+  for
+    my $filter_key ( Replicate_Do_DB, Replicate_Ignore_DB, Replicate_Do_Table,
+    Replicate_Ignore_Table, Replicate_Wild_Do_Table,
+    Replicate_Wild_Ignore_Table )
+  {
+    $status{$filter_key} = uniq_and_sort( $href->{$filter_key} );
+    if ( length( $href->{$filter_key} ) > 0 ) {
+      $str .= sprintf( "%s: %s; ",
+        lc($filter_key), uniq_and_sort( $href->{$filter_key} ) );
+    }
+  }
+  $status{Filter} = $str;
+
+  return %status;
+}
+
+sub get_threads_util {
+  my $self = shift;
+  my @threads;
+
+  my $sth = $self->{dbh}->prepare(Show_Processlist_SQL);
+  $sth->execute();
+
+  while ( my $ref = $sth->fetchrow_hashref() ) {
+    my $id     = $ref->{Id};
+    my $user     = $ref->{User};
+    my $host     = $ref->{Host};
+    my $command  = $ref->{Command};
+    my $state    = $ref->{State};
+    my $query_time = $ref->{Time};
+    my $info     = $ref->{Info};
+    $info =~ s/^\s*(.*?)\s*$/$1/ if defined($info);
+
+    push( @threads, $ref )
+      if ( defined($command) && $command =~ /^Binlog Dump/ );
+  }
+  return @threads;
+}
+
+sub get_threads_nums($) {
+  my $self = shift;
+  my $excludeuser = shift;
+  my @excludeusers = split(/,\s*/, $excludeuser);
+  my @threads;
+
+  my $sth = $self->{dbh}->prepare(Show_Processlist_SQL);
+  $sth->execute();
+  
+  my $num = 0;
+  my $thread_id   = $self->get_current_thread_id();
+  while ( my $ref = $sth->fetchrow_hashref() ) {
+    my $id    = $ref->{Id};
+    my $user  = $ref->{User};
+    my $db    = $ref->{db} || 'NULL';
+    my $command = $ref->{Command};
+
+    if (($id == $thread_id) || ($user eq 'event_scheduler')
+      || ($user eq 'system user') || ($command =~ /^Binlog Dump/)
+      || ($db eq 'information_schema') || ($db eq 'performance_schema')
+      || ($db eq 'mysql') || (grep {/^$user$/} @excludeusers)) {
+      next;
+    }
+    $num++;
+  }
+
+  return $num;
+}
+
+sub cut_host($) {
+  my $info_ref = shift;
+  my @hosts  = ();
+  for (@$info_ref) {
+    my ( $host, $sport ) = split( /:/, $_->{Host}, 2 );
+    $host = '127.0.0.1' if $host =~/localhost/;
+    push @hosts, $host;
+  }
+
+  return @hosts;
+}
+
+sub is_all_innodb {
+  my $self      = shift;
+  my $is_innodb = 1;
+
+  my $sth = $self->{dbh}->prepare(Get_Engine_SQL);
+  $sth->execute();
+
+  while (my $ref = $sth->fetchrow_hashref()) {
+    my $engine = $ref->{ENS};
+    if ($engine !~ m/InnoDB|TokuDB/i) {
+      $is_innodb = 0;
+      last;
+    }
+  }
+
+  return $is_innodb;
+}
+
+# only useful in percona branch
+sub has_backup_lock {
+  my $self = shift;
+  my $value;
+  $self->{has_backup_lock} = 0;
+
+  eval {
+    $value = $self->get_variable(Has_Backup_Locks);
+  };
+  if ($@) {
+    $self->{has_backup_lock} = 0;
+  }
+  if ( defined($value) && $value eq "YES" ) {
+    $self->{has_backup_lock} = 1;
+  }
+  return $self->{has_backup_lock};
+}
+
+sub get_common_info($) {
+  my $self = shift;
+
+  my %common_hash = ();
+  my %status        = $self->check_slave_status();
+  $common_hash{is_slave}    = do {
+    if($status{Status} == 1) {
+      0;
+    }
+    else {
+      1;
+    }
+  };
+  if ($common_hash{is_slave}) {
+    $common_hash{masterhost} = $status{Master_Host} . ":" . $status{Master_Port};;
+    $common_hash{repl_check} = do {
+      if ($status{Slave_SQL_Running} eq 'Yes'
+        && $status{Slave_IO_Running} eq 'Yes' )
+      {
+        if ( $status{Seconds_Behind_Master} == 0 ) {
+          "OK";
+        }
+        else {
+          "Delay @{ [$status{Seconds_Behind_Master}] } Seconds";
+        }
+      }
+      else {
+        "Error";
+      }
+    };
+  }
+  else {
+    # if is master, get the slave host list
+    my @up_threads = $self->get_threads_util();
+    my @slave_hosts = cut_host( \@up_threads );
+    $common_hash{slaves} = [ @slave_hosts ];
+  }
+
+  $common_hash{server_id} = $self->get_server_id();
+  $common_hash{version}   = $self->get_version();
+  $common_hash{read_only} = $self->is_read_only();
+  $common_hash{delay_sec} = $status{Seconds_Behind_Master} || -1;
+  $common_hash{has_gtid}  = $self->has_gtid();
+  $common_hash{databases} = $self->get_database_list();
+  $common_hash{databases_all} = $self->get_database_list('all');
+  $common_hash{is_all_innodb} = $self->is_all_innodb();
+  $common_hash{binlog_format} = $self->show_variable("binlog_format");
+  $common_hash{binlog_enable} = $self->is_binlog_enabled();
+  $common_hash{tx_isolation}  = $self->show_variable("tx_isolation");
+  $common_hash{max_packet}  =
+    $self->get_max_allowed_packet() / 1024 / 1024 . 'MB';
+  $common_hash{charset}     = $self->show_variable("character_set_server");
+  $common_hash{ping}        = $self->{dbh}->ping();
+  $common_hash{last_check}  = time();
+  $common_hash{has_backup_lock} = $self->has_backup_lock();
+
+  return \%common_hash;
+}
+
+sub find_key_from_array {
+  my $array_ref = shift;
+  my $key     = shift;
+  my $i     = 0;
+  foreach ( @{ $array_ref->{slave} } ) {
+    my ( $k, $v ) = each %$_;
+    return $array_ref unless defined $k;
+    if ( $k eq $key ) {
+      return $array_ref->{slave}->[$i];
+    }
+    $i++;
+  }
+  return $array_ref;
+}
+
+1;
+
+package Utils;
+use strict;
+use warnings FATAL => 'all';
+use English qw(-no_match_vars);
+use POSIX qw(strftime);
+use File::Path;
+use File::Find;
+use IO::Socket::INET;
+use Carp;
+use Time::Local;
+
+use vars qw($VERSION);
+our $VERSION = '0.10';
+
+use constant DEBUG => $ENV{DEBUG} || 0;
+
+sub create_dir_if {
+  my $dir  = shift;
+  if (!-d $dir) {
+    eval {
+      mkpath($dir);
+    };
+    if ($@) {
+      my $e = $@;
+      undef $@;
+      unless (-d $dir) {
+        carp "failed to create dir:$dir:$e";
+        return 0;
+      }
+    }
+  }
+  return 1;
+}
+
+sub is_dir_empty {
+  my $dir = shift;
+  return 0 unless -d $dir;
+  opendir (my $dh, $dir) or carp "failed to open $dir";
+
+  my $num = 0;
+
+  eval {
+    READ: while (my $name = readdir($dh)) {
+      $num++ if $name ne "." && $name ne "..";
+      # should be skip if has file
+      last READ if $num > 0;
+    }
+  };
+  if ($@) {
+    $num = 99; # unknown error
+  }
+  return $num == 0;
+}
+
+sub exec_system {
+  my $cmd     = shift;
+  my $log_out = shift;
+
+  if ($log_out) {
+    return  system_rc(system("$cmd >> $log_out 2>&1"));
+  }
+  else {
+    return system_rc(system($cmd));
+  }
+}
+
+sub exec_cmd_return {
+  my $cmd  = shift;
+  my $res;
+  eval {
+    $res = `$cmd`;
+  };
+  if ($@) {
+    return "Err: $@";
+  }
+  chomp($res);
+  return $res;
+}
+
+sub is_tcp_port_open {
+  my $host = shift;
+  my $port = shift;
+
+  my $fail = 0;
+  my $socket = IO::Socket::INET->new(
+    PeerAddr => $host,
+    PeerPort => $port,
+    Proto    => "TCP",
+    Timeout  => 2
+  ) || $fail++;
+
+  if ($fail == 0) {
+    return 1;
+  }
+  return 0;
+}
+
+sub system_rc {
+  my $rc   = shift;
+  my $high = $rc >> 8;
+  my $low  = $rc & 255;
+  return ($high, $low);
+}
+
+sub fuzzy_path {
+  my $cmd = shift;
+  $cmd =~ s/ /\ /gi;
+  $cmd =~ s#//#/#gi;
+  $cmd =~ s#/$##i;
+  return $cmd;
+}
+
+sub convert_timestamp {
+  my $time = shift;
+  my $zone = shift;
+  local $ENV{TZ} = "$zone" if defined $zone;
+  return strftime("%Y-%m-%d %H:%M:%S", localtime($time));
+}
+
+sub current_time {
+  my $zone = shift;
+  local $ENV{TZ} = "$zone" if defined $zone;
+
+  my $time = time;
+  return strftime("%Y-%m-%dT%H:%M:%S", localtime($time));
+}
+
+#     230401 13:48:28
+#   20230401 13:48:28
+# 2023-04-01 13:48:28
+sub mysql_ts_to_timestamp {
+  my $ts = shift;
+  $ts =~ s/-//g;
+  my ($year, $mon, $mday, $hour, $min, $sec) = ($ts =~ m/(\d{2})(\d{2})(\d{2})\s+(\d+):(\d+):(\d+)/);
+  
+  my $tm = timelocal($sec, $min, $hour, $mday, $mon - 1, $year + 2000);
+
+  return $tm;
+}
+
+sub parsecfg {
+  my $contents = shift;
+
+  return _read_string($contents);
+}
+
+sub parsecfg_file {
+  my $file = shift;
+  return undef unless -r $file;
+
+  my $err;
+  open my $fh, '<', $file or $err = "$!";
+
+  if (defined $err) {
+    time_print("parsecfg_file $file err: $err");
+    return undef;
+  }
+
+  my $contents = join('', <$fh>);
+  close $fh;
+
+  return _read_string($contents);
+}
+
+sub _read_string {
+  return undef unless defined $_[0];
+
+  # Parse the file
+  my %outs;
+  my $ns      = '_';
+  my $counter = 0;
+  foreach (split /(?:\015{1,2}\012|\015|\012)/, shift) {
+    $counter++;
+
+    # Skip comments and empty lines
+    next if /^\s*(?:\#|\;|$)/;
+
+    # Remove inline comments
+    s/\s\;\s.+$//g;
+
+    # Handle section headers
+    if ( /^\[\s*(.+?)\s*\]\s*$/ ) {
+      # Create the sub-hash if it doesn't exist.
+      # Without this sections without keys will not
+      # appear at all in the completed struct.
+      $outs{$ns = $1} ||= {};
+      next;
+    }
+
+    # Handle properties
+    if ( /^\s*([^=]+?)\s*=\s*(.*?)\s*$/ ) {
+      $outs{$ns}->{$1} = $2;
+      next;
+    }
+  }
+  return \%outs;
+}
+
+sub get_file_type {
+  my $file = shift;
+
+  my @ks = split(/\./, $file);
+  return $ks[-1];
+}
+
+sub _check_type {
+  my $type = shift;
+  return unless grep(/$type/, qw(gzip lz4 zstd));
+  my $res  = exec_cmd_return("which $type 2>/dev/null");
+
+  chomp($res);
+  print "[warn] cannot found command $type\n" if length($res) == 0;
+  
+  return $res;
+}
+
+sub decompress_gzip_file {
+  my $file = shift;
+  my $gzip = _check_type("gzip");
+  
+  return 0 unless length($gzip);
+  return 0 unless -e $file;
+  
+  my($high, $low) = exec_system("$gzip -q -f -d $file 2>/dev/null");
+  if ($high != 0 || $low != 0) {
+    return 0;
+  }
+  return 1;
+}
+
+sub decompress_lz4_file {
+  my $file = shift;
+  my $lz4  = _check_type("lz4");
+  
+  return 0 unless length($lz4);
+  return 0 unless -e $file;
+  
+  my($high, $low) = exec_system("$lz4 -q -f -d --rm $file 2>/dev/null");
+  if ($high != 0 || $low != 0) {
+    return 0;
+  }
+  return 1;
+}
+
+sub decompress_zstd_file {
+  my $file = shift;
+  my $zstd = _check_type("zstd");
+  
+  return 0 unless length($zstd);
+  return 0 unless -e $file;
+  
+  my($high, $low) = exec_system("$zstd -q -f -d --rm $file 2>/dev/null");
+  if ($high != 0 || $low != 0) {
+    return 0;
+  }
+  return 1;
+}
+
+sub decompress_file {
+  my $file = shift;
+  my $type = get_file_type($file) || 'unkown';
+
+  my %decom_obj = (
+    'gz'  => sub { return decompress_gzip_file(@_) },
+    'lz4' => sub { return decompress_lz4_file(@_) },
+    'zst' => sub { return decompress_zstd_file(@_) },
+  );
+  
+  if (exists $decom_obj{$type}) {
+    return $decom_obj{$type}->($file);
+  }
+  else {
+    print "decompress unknown type: $file\n";
+    return 0
+  }
+}
+
+1;

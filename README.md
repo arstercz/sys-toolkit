@@ -57,6 +57,7 @@ Table of Contents
 * [sys-mysql-block-account](#sys-mysql-block-account)
 * [sys-mysql-health](#sys-mysql-health)
 * [sys-mysql-createdb](#sys-mysql-createdb)
+* [sys-mysql-pitr](#sys-mysql-pitr)
 * [sys-mysql-purge-binlog](#sys-mysql-purge-binlog)
 * [sys-mysql-qps](#sys-mysql-qps)
 * [sys-mysql-repl](#sys-mysql-repl)
@@ -1566,7 +1567,7 @@ Report MySQL information nicely. fork from [pt-mysql-summary 3.4.0](https://www.
 
 ```
 # get report and save samples to /tmp/save_3396_1
-$ wt-mysql-report --save-samples /tmp/save_3396_1 --host 10.1.1.26 --port 3396 --user root --ask-pass
+$ sys-mysql-report --save-samples /tmp/save_3396_1 --host 10.1.1.26 --port 3396 --user root --ask-pass
 
 # details report file
 $ ls /tmp/save_3396_1
@@ -1575,7 +1576,7 @@ innodb-blocked-blocker  mysql-config-file  mysqld-executables  mysql-master-stat
 innodb-longest-trx      mysql-databases    mysqld-instances    mysql-open-tables    mysql-roles        mysql-status       mysql-variables
 
 # read samples from /tmp/save_3396_1 and get the report
-$ wt-mysql-report --read-samples /tmp/save_3396_1 --host 10.1.1.26 --port 3396 --user root --ask-pass
+$ sys-mysql-report --read-samples /tmp/save_3396_1 --host 10.1.1.26 --port 3396 --user root --ask-pass
 ```
 
 use help option to read more.
@@ -1837,6 +1838,40 @@ fork from [pt-summary](https://www.percona.com/doc/percona-toolkit/LATEST/pt-sum
 ```
 use --help option for more usage message.
 
+
+[Back to TOC](#table-of-contents)
+
+sys-mysql-pitr
+==============
+
+`type: Perl`
+
+recover mysql based on PITR(point in time recover).
+
+> only support `mysqldump + binlog`
+
+```
+$ sys-mysql-pitr --conf /etc/wt-pitr.conf --sql /tmp/backup-20230413171112.sql.lz4 --stoptime '2023-04-13 17:14:01' --update --full
+2023-04-13T17:16:08 [--] the file /tmp/backup-20230413171112.sql.lz4 maybe in compress..
+2023-04-13T17:16:08 [--] try to decompress /tmp/backup-20230413171112.sql.lz4
+2023-04-13T17:16:08 [OK] decompress /tmp/backup-20230413171112.sql.lz4 ok
+2023-04-13T17:16:08 [--] get server_id:3476804, log_file:mysql-bin.000033, at_pos:7921, end_pos:7986
+2023-04-13T17:16:08 [--] get mysql-bin.000033: 7921(230413 17:12:17)
+2023-04-13T17:16:08 [--] pitr-instance disabled gtid, will add --skip-gtids option
+2023-04-13T17:16:08 [OK] generate increment sql /export/mysql_pitr/10.1.1.3_3396-3476804_7921.sql
+2023-04-13T17:16:08 [OK] general increment ok, 7921(230413 17:12:17) ~ 2023-04-13 17:14:01
+2023-04-13T17:16:08 [--] will import the /tmp/backup-20230413171112.sql or /export/mysql_pitr/10.1.1.3_3396-3476804_7921.sql
+2023-04-13T17:16:08 [^^] [warn] different mysql version in binlog-dump[5.7.28-31-log] and pitr-instance[5.7.35-38-log]
+2023-04-13T17:16:08 [^^] [warn] be aware of the potential risks
+2023-04-13T17:16:08 [--] not set --database option, used with --full option
+2023-04-13T17:16:08 [--] begining full backup recover - /tmp/backup-20230413171112.sql
+2023-04-13T17:16:42 [OK] mysql full backup recover /tmp/backup-20230413171112.sql ok
+2023-04-13T17:16:42 [--] begining increment backup recover - /export/mysql_pitr/10.1.1.3_3396-3476804_7921.sql
+2023-04-13T17:16:42 [OK] mysql binlog dump recover /export/mysql_pitr/10.1.1.3_3396-3476804_7921.sql ok
+2023-04-13T17:16:42 [OK] pitr recover ok, from mysql-bin.000033:7921(230413 17:12:17) to (2023-04-13 17:14:01)
+```
+
+use `--help` for more message.
 
 [Back to TOC](#table-of-contents)
 

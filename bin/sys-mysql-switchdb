@@ -1,0 +1,395 @@
+#!/usr/bin/env perl
+=head1 NAME
+
+wt-mysql-switchdb -- switch mysql database name
+
+=head1 SYNOPSIS
+
+Usage:  [Option...]
+
+=head1 RISKS
+
+  need higher privielges to create/drop temp database, rename table name.
+  such as `CREATE,DROP,ALTER/SELECT`
+
+=cut
+
+use strict;
+use warnings;
+use Getopt::Long;
+use DBI;
+use DBD::mysql;
+use Data::Dumper;
+use POSIX qw(strftime);
+use Config::Tiny;
+
+my ($conf, $verbose, $switch, $force);
+my $suffix = "_bak";
+my $help   = 0;
+
+GetOptions(
+  "conf=s"   => \$conf,
+  "verbose!" => \$verbose,
+  "suffix=s" => \$suffix,
+  "switch!"  => \$switch,
+  "force!"   => \$force,
+  "help!"    => \$help,
+) or die "error: $!";
+
+$conf = "./$conf" if $conf && $conf =~ /^[^\/]/;
+if ($suffix eq "") {
+  t_print("[error] must set suffix");
+  exit 1;
+}
+
+if ($help) {
+  usage($0);
+}
+
+sub usage {
+    my $name = shift;
+    system("perldoc $name");
+    exit 0;
+}
+
+sub get_dbh {
+  my $host = shift;
+  my $port = shift;
+  my $cnf  = shift;
+  my $db   = $cnf->{db} || "information_schema";
+  my $user = $cnf->{username};
+  my $pass = $cnf->{password};
+  my $dbh   = DBI->connect("DBI:mysql:database=$db;host=$host;port=$port",$user,$pass,
+                            {AutoCommit => 1, RaiseError => 1, PrintError => 0});
+}
+
+sub t_print {
+  my $msg = shift;
+  my $t = strftime("%Y-%m-%d %H:%M:%S", localtime(time));
+  print "[$t] $msg\n";
+}
+
+sub get_instances {
+  my $str  = shift;
+  my @list = split(/,\s*/, $str);
+  my @instances;
+
+  foreach my $k (@list) {
+    my ($host, $port) = split(/\s*:\s*/, $k, 2);
+    push @instances, {host => "$host", port => "$port"}; 
+  }
+
+  return @instances;
+}
+
+my $cnf = Config::Tiny->read($conf);
+unless (defined $cnf) {
+  t_print("read $conf error!");
+  exit 1;
+}
+
+my $sql_get_db =<<"SQL_END";
+select 
+  SCHEMA_NAME as dbname 
+from information_schema.SCHEMATA 
+where 
+  SCHEMA_NAME not in ('mysql', 'information_schema', 'performance_schema', 'sys', '__cdb_recycle_bin__', '__recycle_bin__')
+  AND (SCHEMA_NAME not like '%$suffix' or SCHEMA_NAME not like '%_temp')
+SQL_END
+
+my $sql_get_db_bak =<<"SQL_END";
+select 
+  SCHEMA_NAME as dbname 
+from information_schema.SCHEMATA 
+where 
+  SCHEMA_NAME = ?
+SQL_END
+
+my $sql_get_tbcnt =<<"SQL_END";
+select count(TABLE_NAME) as cnt
+from 
+  information_schema.TABLES
+where
+  TABLE_SCHEMA = ?
+SQL_END
+
+my $sql_get_tables =<<"SQL_END";
+select TABLE_NAME as name
+from
+  information_schema.TABLES
+where
+  TABLE_SCHEMA = ?
+SQL_END
+
+sub rename_db {
+  my $dbh = shift;
+  my $sdb   = shift; # source
+  my $ddb   = shift; # dest
+
+  my $status = 1;
+
+  my $sth = $dbh->selectall_arrayref($sql_get_tables, undef, $sdb);
+  foreach my $k (@$sth) {
+    my ($table) = @$k;
+    my $sql_rename = 
+       sprintf("RENAME TABLE %s.%s TO %s.%s", $sdb, $table, $ddb, $table);
+
+    eval {
+      $dbh->do($sql_rename);
+    };
+    if ($@) {
+      t_print("[error] $sql_rename error: $@");
+      $status = 0;
+    }
+    else {
+      t_print("[ok] $sql_rename ok");
+    }
+  }
+
+  if (is_db_empty($dbh, $sdb)) {
+    t_print("[ok] switch $sdb to $ddb ok");
+  }
+  else {
+    t_print("[error] switch $sdb tp $ddb error, skip");
+    $status = 0
+  }
+
+  return $status;
+}
+
+sub switch_db {
+  my $dbh = shift;
+  my $sdb = shift; # source
+  my $bdb = shift; # backup
+  my $tdb = shift; # temp
+
+  # rename source to temp
+  unless(rename_db($dbh, $sdb, $tdb)) {
+    t_print("[error] check by yourself, from $sdb to $tdb");
+    return 0;
+  }
+
+  # rename backup to source
+  unless(rename_db($dbh, $bdb, $sdb)) {
+    t_print("[error] check by yourself, from $bdb to $sdb");
+    return 0;
+  }
+
+  # rename temp to backup
+  unless(rename_db($dbh, $tdb, $bdb)) {
+    t_print("[error] check by yourself, from $tdb to $bdb");
+    return 0;
+  }
+
+  # drop temp database
+  unless(drop_db($dbh, $tdb)) {
+    t_print("[error] check by yourself, drop $tdb!");
+    return 0;
+  }
+
+  t_print("[ok] switch from $sdb to $bdb ok!");
+  return 1;
+}
+
+sub verify_db {
+  my $dbh    = shift;
+  my $dbbak  = shift;
+
+  return 0 unless defined $dbbak;
+
+  my $sth = $dbh->selectrow_hashref($sql_get_db_bak, undef, $dbbak);
+  if (exists $sth->{dbname}) {
+    return 1;
+  }
+
+  return 0; # not exist
+}
+
+sub is_db_empty {
+  my $dbh = shift;
+  my $db  = shift;
+
+  my $sth = $dbh->selectrow_hashref($sql_get_tbcnt, undef, $db);
+  return 0 unless defined $sth;
+
+  if ($sth->{cnt} > 0) {
+    return 0;
+  }
+
+  return 1;
+}
+
+sub drop_db {
+  my $dbh = shift;
+  my $db  = shift;
+
+  my $sql_drop = "DROP DATABASE IF EXISTS $db";
+  eval {
+    $dbh->do($sql_drop);
+  };
+  if ($@) {
+    t_print("[error] drop database $db error, check by yourself! $@");
+    return 0;
+  }
+  else {
+    t_print("[ok] drop database $db ok.");
+  }
+
+  return 1;
+}
+
+# check temp is ok, and create if not exists
+sub verify_temp {
+  my $dbh   = shift;
+  my $temp  = shift;
+  my $force = shift;
+
+  if (verify_db($dbh, $temp)) {
+    t_print("$temp exist, check table cnt");
+
+    if (!is_db_empty($dbh, $temp)) {
+      t_print("[warn] $temp is not empty, must empty, or use --force to drop");
+      if ($force) {
+        unless (drop_db($dbh, $temp)) {
+          t_print("drop error, check by yourself, skip!");
+          return 0;
+        }
+      }
+      else {
+        return 0; # if not force
+      }
+    }
+    else {
+      t_print("$temp exists, but is empty, ok");
+      return 1; # ok
+    }
+  }
+
+  # will create temp db
+  my $sql_create = "CREATE DATABASE IF NOT EXISTS $temp";
+  eval {
+    $dbh->do($sql_create);
+  };
+  if ($@) {
+    t_print("[error] create database $temp error, $@");
+    return 0;
+  }
+  else {
+    t_print("[ok] create database $temp ok");
+  }
+
+  return 1; # ok
+}
+
+my @instance = get_instances($cnf->{game_db}->{instance});
+
+my $done = 1;
+foreach my $k (@instance) {
+  my $meta = "$k->{host}:$k->{port}";
+
+  my $dbh = get_dbh($k->{host}, $k->{port}, $cnf->{game_db});
+  unless (defined $dbh) {
+    t_print("[error] $meta cannot get dbh!");
+    next;
+  }
+
+  my $sth1 = $dbh->selectall_arrayref($sql_get_db);
+
+  foreach my $k (@$sth1) {
+    my ($db)   = @$k;
+    my $db_bak = "$db" . "$suffix";
+
+    if (verify_db($dbh, $db_bak)) {
+      t_print("[verbose] need switch: $meta - $db -> $db_bak");
+    }
+    else {
+      next; # skip if not verify db
+    }
+
+    if ($switch) {
+      my $db_temp = $db . "_temp";
+      unless (verify_temp($dbh, $db_temp, $force)) {
+        t_print("[error] temp check: $meta - $db_temp not ok, skip.");
+        $done = 0;
+        next;
+      }
+
+      if (switch_db($dbh, $db, $db_bak, $db_temp)) {
+        t_print("[ok] switch: $meta - $db -> $db_bak ok.");
+      }
+      else {
+        t_print("[error] switch: $meta - $db -> $db_bak error!");
+        $done = 0;
+      }
+    }
+    t_print("-------------------------------------------");
+  }
+}
+
+if ($switch) {
+  if ($done) {
+    t_print("[ok] switch all instances ok.");
+  }
+  else {
+    t_print("[error] switch all instances error. check by yourself!");
+    exit 1; # exit error
+  }
+}
+
+
+# ###################################################################
+# Documentation.
+# ###################################################################
+=head1 OPTIONS
+
+=over 4
+
+=item conf
+
+conf file that save mysql instance and user/pass info. such as:
+
+  [game_db]   # fixed section name
+  instance=10.77.242.53:3396,10.77.242.53:3397
+  db=information_schema 
+  username=user_backup
+  password=xxxxxxxx
+
+  > game_db was fixed section;
+  > instances can set multiple, seperate by comma; 
+  > db is the connection db, default is information_schema;
+  > username and password must the same if there are multiple instance;
+
+=item verbose
+
+default is false, if set, will print more msg.
+
+=item switch
+
+execute to switch two database name(also rename table).
+
+note: instance will switch error if rename table error. and will 
+skip this instance, goto the next.
+
+=item force
+
+if exists temp database, check and clear it.
+
+=item suffix
+
+backup database suffix mark, default is `_bak`, tencent and aliyun maybe different.
+
+=item help
+
+default is false, get more help message.
+
+=back
+
+=head1 AUTHOR
+
+arstercz <arstercz@gmail.com>
+
+=head1 CHANGELOG
+
+v0.1.0 version
+
+=cut

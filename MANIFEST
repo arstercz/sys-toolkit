@@ -32,6 +32,7 @@ bin/sys-mysql-qps
 bin/sys-mysql-repl
 bin/sys-mysql-report
 bin/sys-mysql-search
+bin/sys-mysql-switchdb
 bin/sys-mysql-summary
 bin/sys-murmur3
 bin/sys-needrestart

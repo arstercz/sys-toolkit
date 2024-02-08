@@ -54,6 +54,7 @@ Table of Contents
 * [sys-mysql-sql-reject](#sys-mysql-sql-reject)
 * [sys-mysql-diff](#sys-mysql-diff)
 * [sys-mysql-search](#sys-mysql-search)
+* [sys-mysql-switchdb](#sys-mysql-switchdb)  
 * [License](#License)
 
 sys-genpass
@@ -1176,6 +1177,74 @@ Enter password :
       SCHEMA: test, TABLE: test_count, BASE TYPE: BASE TABLE
 ```
 you can use `SQL regexp` in `--search` option. use the help option to read more.
+
+[Back to TOC](#table-of-contents)
+
+sys-mysql-switchdb
+==================
+
+`type: perl`
+
+switch two database name and rename all tables.
+
+### Usage
+
+> need: Config::Tiny
+
+create config file, eg:
+```
+[game_db]
+instance=10.0.1.53:3396,10.0.1.54:3397    # comma split
+db=information_schema 
+username=user_use
+password=xxxxxxxx
+```
+
+check switch:
+```
+# sys-mysql-switchdb --conf switch.cnf --suffix _bak
+[2024-01-29 15:11:43] [verbose] need switch: 10.0.1.53:3396 - t_5100 -> t_5100_bak
+[2024-01-29 15:11:43] -------------------------------------------
+[2024-01-29 15:11:43] [verbose] need switch: 10.0.1.53:3397 - percona -> percona_bak
+[2024-01-29 15:11:43] -------------------------------------------
+```
+
+check and force switch db name:
+```
+# sys-mysql-switchdb --conf  switch.cnf --suffix _bak --switch --force
+[2024-01-29 15:11:52] [verbose] need switch: 10.0.1.53:3396 - t_5100 -> t_5100_bak
+[2024-01-29 15:11:52] [ok] create database t_5100_temp ok
+[2024-01-29 15:11:52] [ok] RENAME TABLE t_5100.usert TO t_5100_temp.usert ok
+[2024-01-29 15:11:52] [ok] RENAME TABLE t_5100.usert2 TO t_5100_temp.usert2 ok
+[2024-01-29 15:11:52] [ok] RENAME TABLE t_5100.usert3 TO t_5100_temp.usert3 ok
+[2024-01-29 15:11:52] [ok] RENAME TABLE t_5100.usert4 TO t_5100_temp.usert4 ok
+[2024-01-29 15:11:52] [ok] switch t_5100 to t_5100_temp ok
+[2024-01-29 15:11:52] [ok] RENAME TABLE t_5100_bak.usert TO t_5100.usert ok
+[2024-01-29 15:11:52] [ok] RENAME TABLE t_5100_bak.usert2 TO t_5100.usert2 ok
+[2024-01-29 15:11:52] [ok] switch t_5100_bak to t_5100 ok
+[2024-01-29 15:11:52] [ok] RENAME TABLE t_5100_temp.usert TO t_5100_bak.usert ok
+[2024-01-29 15:11:52] [ok] RENAME TABLE t_5100_temp.usert2 TO t_5100_bak.usert2 ok
+[2024-01-29 15:11:52] [ok] RENAME TABLE t_5100_temp.usert3 TO t_5100_bak.usert3 ok
+[2024-01-29 15:11:52] [ok] RENAME TABLE t_5100_temp.usert4 TO t_5100_bak.usert4 ok
+[2024-01-29 15:11:52] [ok] switch t_5100_temp to t_5100_bak ok
+[2024-01-29 15:11:52] [ok] drop database t_5100_temp ok.
+[2024-01-29 15:11:52] [ok] switch from t_5100 to t_5100_bak ok!
+[2024-01-29 15:11:52] [ok] switch: 10.0.1.53:3396 - t_5100 -> t_5100_bak ok.
+[2024-01-29 15:11:52] -------------------------------------------
+[2024-01-29 15:11:52] [verbose] need switch: 10.0.1.53:3397 - percona -> percona_bak
+[2024-01-29 15:11:52] [ok] create database percona_temp ok
+[2024-01-29 15:11:52] [ok] RENAME TABLE percona.user TO percona_temp.user ok
+[2024-01-29 15:11:52] [ok] switch percona to percona_temp ok
+[2024-01-29 15:11:52] [ok] RENAME TABLE percona_bak.user TO percona.user ok
+[2024-01-29 15:11:52] [ok] switch percona_bak to percona ok
+[2024-01-29 15:11:52] [ok] RENAME TABLE percona_temp.user TO percona_bak.user ok
+[2024-01-29 15:11:52] [ok] switch percona_temp to percona_bak ok
+[2024-01-29 15:11:52] [ok] drop database percona_temp ok.
+[2024-01-29 15:11:52] [ok] switch from percona to percona_bak ok!
+[2024-01-29 15:11:52] [ok] switch: 10.0.1.53:3397 - percona -> percona_bak ok.
+[2024-01-29 15:11:52] -------------------------------------------
+[2024-01-29 15:11:52] [ok] switch all instances ok.
+```
 
 [Back to TOC](#table-of-contents)
 

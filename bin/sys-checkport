@@ -70,12 +70,49 @@ unless ($port) {
 $| = 1;
 my $proto  = $udp == 0 ? "tcp" : "udp";
 my $fail   = 0;
-my $socket = IO::Socket::INET->new(
-    PeerAddr => $host,
-    PeerPort => $port,
-    Proto    => $proto,
-    Timeout  => 2
-) || $fail++;
+my $socket;
+
+if ($udp) {
+  $socket = IO::Socket::INET->new(
+      PeerAddr => $host,
+      PeerPort => $port,
+      Proto    => $proto,
+      Timeout  => 2
+  );
+
+  eval {
+      $socket->send('port check');
+  };
+  if ($@) {
+    $fail++;
+    goto LABEL_CALC;
+  }
+
+  # wait to receive ICMP unreachable
+  # read more from
+  #   https://serverfault.com/questions/416205/testing-udp-port-connectivity
+  #   http://en.wikipedia.org/wiki/ICMP_Destination_Unreachable
+  sleep(1);
+
+  $socket->blocking(0);
+  if (! $socket->recv(my $buf, 0)) {
+    # will get ECONNREFUSED on UNIX, other error cannot determine port state
+    if (! $!{EAGAIN}) {
+      $fail++;
+    }
+  }
+}
+else {
+  $socket = IO::Socket::INET->new(
+      PeerAddr => $host,
+      PeerPort => $port,
+      Proto    => $proto,
+      Timeout  => 2
+  ) || $fail++;
+}
+
+LABEL_CALC:
+
 my $str = do {
     if ( $fail > 0 ) {
         "port $port: closed";

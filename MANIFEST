@@ -48,4 +48,5 @@ bin/sys-swap
 bin/sys-traffic-capture
 src/sys-mysql-sql-reject.c
 src/sys-unmap-file.c
+src/sys-slow-delete-file.c
 src/sys-mapstat-file.c

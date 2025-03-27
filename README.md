@@ -36,6 +36,7 @@ Table of Contents
 * [sys-rmcolor](#sys-rmcolor)
 * [sys-kill-close-wait](#sys-kill-close-wait)
 * [sys-unmap-file](#sys-unmap-file)
+* [sys-slow-delete-file](#sys-slow-delete-file)
 * [sys-mapstat-file](#sys-mapstat-file)
 * [sys-memory-maps](#sys-memory-maps)
 * [sys-memcached-check](#sys-memcached-check)
@@ -1611,6 +1612,38 @@ Enter password :
 2019-05-09T18:43:25 master generate 0 binlog files at per hours
 ```
 use `--help` option for more usage message.
+
+[Back to TOC](#table-of-contents)
+
+sys-slow-delete-file
+====================
+
+`type: c`
+
+truncate a file from begining, fork from [fallocate.c](https://github.com/util-linux/util-linux/blob/v2.23.2/sys-utils/fallocate.c).
+
+> use fallocate FALLOC_FL_COLLAPSE_RANGE mode, note the -o and -l option must be multiple IO Block size(most filesystem is 4096 bytes)
+> note: FALLOC_FL_COLLAPSE_RANGE is not support in lower kernel version(such as `centos 6 - 2.6.32`).
+
+truncate 10MB from begining:
+```
+✗ ls -hl /tmp/test.csv 
+-rw-r--r-- 1 root root 75M Mar 27 15:40 /tmp/test.csv
+
+✗ head -n 1 /tmp/test.csv 
+'10035','371f523bbaa744c4b238084dce2a8061','2',1721062810,'行动',0,1,0,0,0,0
+
+# truncate file content from begining
+✗ sys-slow-delete-file -o 0 -l 10M -f /tmp/test.csv
+
+✗ ls -hl /tmp/test.csv 
+-rw-r--r-- 1 root root 65M Mar 27 16:46 /tmp/test.csv
+
+✗ head -n 1 /tmp/test.csv
+aa9ea02e4ac229e700','2',1721062810,'已恢复',0,1,1,0,0,0
+```
+
+use `-h` option for more usage message.
 
 [Back to TOC](#table-of-contents)
 

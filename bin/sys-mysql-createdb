@@ -160,9 +160,23 @@ sub check_grant {
    return 0;
 }
 
+sub version_db {
+   my $dbh  = shift;
+   my $info = $dbh->selectrow_hashref("select substring(version(), 1, 3) as version");
+
+   return $info->{version} || 8.0;
+}
+
 sub binlog_db {
-   my $dbh = shift;
-   my $sql_info = $dbh->selectrow_hashref("show master status");
+   my $dbh     = shift;
+   my $version = version_db($dbh);
+
+   my $status_sql = "show master status";
+   if ($version >= 8.4) {
+      $status_sql = "show binary log status";
+   }
+
+   my $sql_info = $dbh->selectrow_hashref("$status_sql");
 
    my %binlog_hash;
    if ( length($sql_info->{Binlog_Do_DB}) ) {
@@ -265,6 +279,14 @@ sub grant_user {
    my $set_priv_sql =
       sprintf("GRANT $priv ON %s.* TO %s\@'%s'",
              $createdb, $account_user, $account_host);
+
+   my $version = version_db($dbh);
+   if ($version >= 8.0) {
+      $set_user_sql =
+        sprintf("CREATE USER IF NOT EXISTS  %s\@\'%s\' IDENTIFIED WITH mysql_native_password BY \'%s\'",
+                $account_user, $account_host, $account_pass);
+   }
+
    printf("SQL: %s\n     %s\n", $set_user_sql, $set_priv_sql) if $verbose;
 
 
@@ -336,8 +358,8 @@ else {
                         join("", map{
                            ("a".."z", "A".."Z", 
                              0 .. 9, "+", "-", "_", "@",
-                             "!", "~", "^", "%", "{", "}",
-                           )[rand 72] 
+                             "!", "~", "^", "{", "}",
+                           )[rand 71] 
                          } 1..20) 
                      );
    if (grant_user($dbh, $account_user, $account_host, $account_pass) )

@@ -495,7 +495,8 @@ $ perl sys-mysql-createdb --host 127.0.0.1 --user root --database test1  --askpa
 Enter password : 
 connect to 127.0.0.1, 3306, root, xxxxxxxx ...
 SQL: create database if not exists test3
-SQL: CREATE USER user_test1@'10.0.21.%' IDENTIFIED BY 'XmhdGEZZ1KN{_fW0g3U}'
+SQL: CREATE USER user_test1@'10.0.21.%' IDENTIFIED WITH mysql_native_password BY 'XmhdGEZZ1KN{_fW0g3U}' -- if version >= 8.0
+SQL: CREATE USER user_test1@'10.0.21.%' IDENTIFIED BY 'XmhdGEZZ1KN{_fW0g3U}'  -- if version < 8.0
      GRANT select, insert ON test3.* TO user_test1@'10.0.21.%'
 [WARN] login user root@127.0.0.1 has no Grant_priv, skip ..
     +-- Execute manually: GRANT select, insert ON test3.* TO user_test1@'10.0.21.%'

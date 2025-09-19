@@ -824,7 +824,7 @@ sub get_dbh {
                      . "mysql_ssl_ca_file=$self->{mysql_ssl_ca_file}";
             }
             else {
-                $dsn = "DBI:$driver:mysql_connect_timeout=$timeout:mysql_read_timeout=$read_timeout:mysql_write_timeout=$write_timeout:database=$database;host=$host;port=$port";
+                $dsn = "DBI:$driver:mysql_connect_timeout=$timeout:mysql_read_timeout=$read_timeout:mysql_write_timeout=$write_timeout:database=$database;host=$host;port=$port;mysql_get_server_pubkey=1";
             }
 
             DBI->connect($dsn, $user, $password, $defaults );

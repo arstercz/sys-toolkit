@@ -402,7 +402,7 @@ sub get_dbh {
             join( ', ', map { "$_=>$defaults->{$_}" } keys %$defaults ) );
         $dbh = eval {
             DBI->connect(
-                "DBI:$driver:database=$database;host=$host;port=$port",
+                "DBI:$driver:database=$database;host=$host;port=$port;mysql_get_server_pubkey=1",
                 $user, $password, $defaults );
         };
 

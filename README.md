@@ -42,6 +42,7 @@ Table of Contents
 * [sys-memcached-check](#sys-memcached-check)
 * [sys-memcached-capture](#sys-memcached-capture)
 * [sys-mysql-summary](#sys-mysql-summary)
+* [sys-mysql-kill](#sys-mysql-kill)
 * [sys-mysql-kill-blocked-thread](#sys-mysql-kill-blocked-thread)
 * [sys-mysql-kill-long-query](#sys-mysql-kill-long-query)
 * [sys-mysql-block-account](#sys-mysql-block-account)
@@ -237,6 +238,47 @@ memcached 10.0.21.5:11211 check ok!
 memcached fe80::222:19ff:fe54:33c5%em1:11211 check ok!
 ```
 help message: $ ./sys-memcached-check --help
+
+[Back to TOC](#table-of-contents)
+
+sys-mysql-kill
+==============
+
+`type: perl`
+
+Fork from [percona-toolkit-3.7.1 pt-kill](https://docs.percona.com/percona-toolkit/pt-kill.html), kill MySQL queries, but add more features:
+```
+1. add mysql_connect_timeout(default is 3s) when to connect MySQL instance;
+2. add dry-run mode to summarize the processes;
+3. support killed by query's fingerprint;
+```
+
+#### Usage
+
+> killed by fingerprint
+
+```
+$ sys-mysql-kill --config /etc/sys-kill.conf --dry-run
+  ts                  chksm                              sum_time     avg_time   cnt   info
+# 2026-01-08T15:30:02 1BC294E3D0CC686ECE611A46174D32C6   18           9          2     select *, sleep(?) from ptkilled_log where kill_id < ?
+# 2026-01-08T15:30:02 0958BC4AC04792C5C8A502F88B20114B   6            6          1     select hostname, port, sleep(?) from ptkilled_log where kill_id < ?
+# 2026-01-08T15:30:02 0BBD8F114BF69E6F45609ADE347419D3   0            0          1     show full processlist
+
+
+$ wt-mysql-kill --config /etc/sys-kill.conf \
+   --group-by fingerprint \
+   --victims all \
+   --kill-query-ids 1BC294E3D0CC686ECE611A46174D32C6,0958BC4AC04792C5C8A502F88B20114B
+```
+
+> killed by normal mode
+
+```
+pt-kill --config /etc/sys-kill.conf \
+   --busy-time 10s \
+   --run-time 30m \
+   --match-info "(select|SELECT)"
+```
 
 [Back to TOC](#table-of-contents)
 

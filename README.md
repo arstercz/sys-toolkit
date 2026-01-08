@@ -43,8 +43,6 @@ Table of Contents
 * [sys-memcached-capture](#sys-memcached-capture)
 * [sys-mysql-summary](#sys-mysql-summary)
 * [sys-mysql-kill](#sys-mysql-kill)
-* [sys-mysql-kill-blocked-thread](#sys-mysql-kill-blocked-thread)
-* [sys-mysql-kill-long-query](#sys-mysql-kill-long-query)
 * [sys-mysql-block-account](#sys-mysql-block-account)
 * [sys-mysql-health](#sys-mysql-health)
 * [sys-mysql-createdb](#sys-mysql-createdb)
@@ -265,7 +263,7 @@ $ sys-mysql-kill --config /etc/sys-kill.conf --dry-run
 # 2026-01-08T15:30:02 0BBD8F114BF69E6F45609ADE347419D3   0            0          1     show full processlist
 
 
-$ wt-mysql-kill --config /etc/sys-kill.conf \
+$ sys-mysql-kill --config /etc/sys-kill.conf \
    --group-by fingerprint \
    --victims all \
    --kill-query-ids 1BC294E3D0CC686ECE611A46174D32C6,0958BC4AC04792C5C8A502F88B20114B
@@ -274,80 +272,11 @@ $ wt-mysql-kill --config /etc/sys-kill.conf \
 > killed by normal mode
 
 ```
-pt-kill --config /etc/sys-kill.conf \
+sys-mysql-kill --config /etc/sys-kill.conf \
    --busy-time 10s \
    --run-time 30m \
    --match-info "(select|SELECT)"
 ```
-
-[Back to TOC](#table-of-contents)
-
-sys-mysql-kill-blocked-thread
-=============================
-
-`type: perl`
-
-#### Dependency
-```
-DBI
-DBD::mysql
-perl-TermReadKey (if enable askpass option)
-```
-
-kill the mysql blocking thread id if blocking times great than threthold(default is 10 times).
-
-```
-$ ./sys-mysql-killblockthread -h 127.0.0.1 -P 3306 -u root --askpass -v -k
-Enter password : 
-connect to 127.0.0.1, 3306, root, xxxxxxxx ...
-no thread_id blocking.
-
-
- sys-mysql-killblockthread -h 127.0.0.1 -P 3306 -u root --askpass -v
-Enter password : 
-connect to 127.0.0.1, 3306, root, xxxxxxxx ...
-waiting_thread_id:  4
-waiting_query:      delete from t1 where a = 1
-waiting_time:       5
-blocking_host:      10.0.21.5:53150
-blocking_thread_id: 18
-blocking_query:     null
-kill 100123 ok.
-kill 100251 ok.
-```
-
-help message: $ ./sys-mysql-killblockthread --help
-
-[Back to TOC](#table-of-contents)
-
-sys-mysql-kill-long-query
-=========================
-
-`type: perl`
-
-#### Dependency
-```
-DBI
-DBD::mysql
-perl-TermReadKey (if enable askpass option)
-```
-kill the mysql long query's thread if query time greater than specified 
-time value;
-
-``
-note: This script will kill running sql, some update/select statements 
-will be killed, connection db is null , state in 'Binlog Dump', 
-'Connect' and 'Sleep' is ignored.
-``
-
-```
-$ ./sys-mysql-killlongquery -h 127.0.0.1 -u root --askpass -v -k -t 5
-Enter password : 
-connect to 127.0.0.1, 3306, root, xxxxxxxx ...
-[INFO] thread: 92, user: test@127.0.0.1:45775, db: test, state: User sleep, time: 5, query: select sleep(15)
-kill 92 ok
-```
-help message: $ ./sys-mysql-killlongquery --help
 
 [Back to TOC](#table-of-contents)
 

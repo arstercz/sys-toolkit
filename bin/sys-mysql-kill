@@ -2095,6 +2095,7 @@ sub get_dbh {
 
    my $dbh;
    my $tries = 2;
+   $cxn_string .= "mysql_ssl=0;mysql_get_server_pubkey=1";
    while ( !$dbh && $tries-- ) {
       PTDEBUG && _d($cxn_string, ' ', $user, ' ', $pass,
          join(', ', map { "$_=>$defaults->{$_}" } keys %$defaults ));
@@ -7331,6 +7332,14 @@ sub main {
          );
       };
 
+      # auto check whether instance is aws rds or not
+      my $chk_sql = "SHOW PROCEDURE STATUS WHERE Db = 'mysql' AND Name = 'rds_kill_query'";
+      my $chk_sth = $dbh->selectrow_hashref("$chk_sql");
+      if (exists $chk_sth->{'Name'}) {
+         msg("check instances is aws rds/auaroa, change kill sql to call procedure");
+         $o->set('rds', 1);
+         $kill_sql = $o->get('kill-query') ? 'CALL mysql.rds_kill_query(?)' : 'CALL mysql.rds_kill(?)';
+      }
 
       $kill_sth = $dbh->prepare($kill_sql);
       $kill = sub {
